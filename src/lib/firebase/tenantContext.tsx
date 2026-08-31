@@ -21,6 +21,10 @@ import {
 import { appConfig } from "@/config/appConfig";
 
 interface TenantContextType {
+  isAuthenticated: boolean;
+  login: (email: string, password?: string) => boolean;
+  logout: () => void;
+  loginAsDemo: () => void;
   isDemoMode: boolean;
   activeOrg: Organization;
   toggleDemoMode: () => void;
@@ -64,6 +68,8 @@ interface TenantContextType {
 const TenantContext = createContext<TenantContextType | undefined>(undefined);
 
 export function TenantProvider({ children }: { children: React.ReactNode }) {
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(true);
+  const [loggedUserEmail, setLoggedUserEmail] = useState<string>("admin@staxify.com");
   const [isDemoMode, setIsDemoMode] = useState<boolean>(false);
   const [currentRole, setCurrentRole] = useState<UserRole>("admin");
   const [organizations, setOrganizations] = useState<Organization[]>(initialOrganizations);
@@ -86,6 +92,16 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
   // Initialize from LocalStorage
   useEffect(() => {
     try {
+      const savedAuth = localStorage.getItem("staxhq_auth_user");
+      if (savedAuth) {
+        try {
+          const parsed = JSON.parse(savedAuth);
+          setIsAuthenticated(true);
+          if (parsed.email) setLoggedUserEmail(parsed.email);
+          if (parsed.role) setCurrentRole(parsed.role);
+        } catch {}
+      }
+
       const savedMode = localStorage.getItem("staxhq_demo_mode");
       if (savedMode !== null) setIsDemoMode(savedMode === "true");
 
@@ -144,15 +160,37 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
   }, [isDemoMode, organizations]);
 
   const currentUser: UserProfile = useMemo(() => {
+    if (isDemoMode) {
+      return {
+        uid: "usr-demo-admin",
+        displayName: "Demo Administrator",
+        email: "demo@staxify.com",
+        role: "admin",
+        orgId: "demo-org",
+        createdAt: Date.now() - 30 * 86400000,
+      };
+    }
+
+    const matched = teamMembers.find(
+      (m) => m.email.toLowerCase() === loggedUserEmail.toLowerCase()
+    );
+
+    if (matched) {
+      return {
+        ...matched,
+        role: currentRole || matched.role,
+      };
+    }
+
     return {
       uid: "usr-admin-1",
-      displayName: isDemoMode ? "Demo Administrator" : "Cahaba Admin",
-      email: isDemoMode ? "demo@staxhq.com" : "admin@staxhq.com",
+      displayName: "Admin Operator",
+      email: loggedUserEmail || "admin@staxify.com",
       role: currentRole,
       orgId: activeOrg.id,
       createdAt: Date.now() - 30 * 86400000,
     };
-  }, [isDemoMode, activeOrg.id, currentRole]);
+  }, [isDemoMode, loggedUserEmail, teamMembers, currentRole, activeOrg.id]);
 
   const toggleDemoMode = () => {
     const next = !isDemoMode;
@@ -163,6 +201,44 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
   const handleRoleChange = (role: UserRole) => {
     setCurrentRole(role);
     localStorage.setItem("staxhq_user_role", role);
+  };
+
+  const login = (email: string, password?: string) => {
+    const trimmed = email.trim();
+    if (!trimmed) return false;
+
+    const matched = teamMembers.find(
+      (m) => m.email.toLowerCase() === trimmed.toLowerCase()
+    );
+
+    const roleToSet: UserRole = matched
+      ? matched.role
+      : (trimmed.toLowerCase().includes("admin") ? "admin" : "employee");
+
+    setCurrentRole(roleToSet);
+    setLoggedUserEmail(trimmed);
+    setIsAuthenticated(true);
+    setIsDemoMode(false);
+
+    localStorage.setItem("staxhq_auth_user", JSON.stringify({ email: trimmed, role: roleToSet }));
+    localStorage.setItem("staxhq_user_role", roleToSet);
+    localStorage.setItem("staxhq_demo_mode", "false");
+    return true;
+  };
+
+  const logout = () => {
+    setIsAuthenticated(false);
+    localStorage.removeItem("staxhq_auth_user");
+  };
+
+  const loginAsDemo = () => {
+    setIsDemoMode(true);
+    setCurrentRole("admin");
+    setLoggedUserEmail("demo@staxify.com");
+    setIsAuthenticated(true);
+    localStorage.setItem("staxhq_auth_user", JSON.stringify({ email: "demo@staxify.com", role: "admin", isDemo: true }));
+    localStorage.setItem("staxhq_demo_mode", "true");
+    localStorage.setItem("staxhq_user_role", "admin");
   };
 
   // Customers
@@ -382,6 +458,10 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
   return (
     <TenantContext.Provider
       value={{
+        isAuthenticated,
+        login,
+        logout,
+        loginAsDemo,
         isDemoMode,
         activeOrg,
         toggleDemoMode,

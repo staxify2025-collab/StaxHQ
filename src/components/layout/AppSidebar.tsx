@@ -15,10 +15,12 @@ import {
   Building2,
   Sparkles,
   ExternalLink,
-  ChevronRight
+  ChevronRight,
+  LogOut
 } from "lucide-react";
 import { useTenant } from "@/lib/firebase/tenantContext";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { getInitials } from "@/lib/utils";
 
 const navigationItems = [
@@ -46,6 +48,7 @@ const navigationItems = [
     name: "Financials & Revenue",
     href: "/financials",
     icon: DollarSign,
+    adminOnly: true,
   },
   {
     name: "Admin & Settings",
@@ -57,7 +60,7 @@ const navigationItems = [
 
 export function AppSidebar() {
   const pathname = usePathname();
-  const { isDemoMode, activeOrg, currentRole, customers, contracts } = useTenant();
+  const { isDemoMode, activeOrg, currentRole, customers, contracts, currentUser, logout } = useTenant();
 
   return (
     <aside className="w-64 bg-card border-r border-border/80 flex flex-col h-screen sticky top-0 shrink-0 select-none">
@@ -165,22 +168,38 @@ export function AppSidebar() {
         </div>
       </div>
 
-      {/* Footer User Info */}
+      {/* Footer User Info & Sign Out */}
       <div className="p-3 border-t border-border/60 flex items-center justify-between bg-card/50">
-        <div className="flex items-center gap-2.5">
-          <div className="h-8 w-8 rounded-full bg-gradient-to-tr from-indigo-500 to-purple-600 text-white text-xs font-bold flex items-center justify-center shadow-sm">
-            {isDemoMode ? "DM" : "HQ"}
+        <div className="flex items-center gap-2.5 min-w-0">
+          <div className="h-8 w-8 rounded-full bg-gradient-to-tr from-indigo-500 to-purple-600 text-white text-xs font-bold flex items-center justify-center shadow-sm shrink-0">
+            {getInitials(currentUser?.displayName || "Admin")}
           </div>
-          <div className="text-left">
-            <div className="text-xs font-semibold text-foreground leading-tight">
-              {isDemoMode ? "Demo Mode" : "Stax Operator"}
+          <div className="text-left min-w-0">
+            <div className="text-xs font-semibold text-foreground leading-tight truncate max-w-[110px]">
+              {currentUser?.displayName || "Admin"}
             </div>
-            <div className="text-[11px] text-muted-foreground capitalize flex items-center gap-1">
-              <ShieldCheck className="h-3 w-3 text-indigo-500" />
-              <span>{currentRole}</span>
+            <div className="text-[10px] text-muted-foreground capitalize flex items-center gap-1 mt-0.5">
+              <span className={`px-1.5 py-0.2 rounded text-[9px] font-extrabold uppercase ${
+                currentRole === "admin"
+                  ? "bg-indigo-500/15 text-indigo-600 dark:text-indigo-400"
+                  : "bg-slate-500/15 text-slate-600 dark:text-slate-400"
+              }`}>
+                {currentRole}
+              </span>
             </div>
           </div>
         </div>
+
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          onClick={logout}
+          className="h-8 w-8 p-0 text-muted-foreground hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/50 shrink-0"
+          title="Sign Out"
+        >
+          <LogOut className="h-4 w-4" />
+        </Button>
       </div>
     </aside>
   );
