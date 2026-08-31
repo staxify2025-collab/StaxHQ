@@ -44,6 +44,7 @@ export interface ContactPerson {
 
 export interface FinancialRecord {
   totalContractValue: number;
+  setupFee?: number; // One-time build / onboarding fee
   recurringAmount: number;
   billingCycle: BillingCycle;
   paymentStatus: PaymentStatus;
@@ -66,6 +67,7 @@ export interface Customer {
   id: string;
   orgId: string;
   name: string; // e.g. "Town of Rehobeth"
+  primaryProduct?: string; // e.g. "GovStax", "Company Pulse", "StaxEcho"
   type: CustomerType;
   status: CustomerStatus;
   industry?: string;

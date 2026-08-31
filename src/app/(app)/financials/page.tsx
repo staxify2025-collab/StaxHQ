@@ -8,22 +8,26 @@ import {
   Clock, 
   CreditCard, 
   Printer, 
-  Download, 
   Building2, 
   CheckCircle2, 
   AlertCircle,
   Calendar,
-  ShieldCheck
+  ShieldCheck,
+  Layers,
+  Sparkles,
+  Filter
 } from "lucide-react";
 import { useTenant } from "@/lib/firebase/tenantContext";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { formatCurrency, formatDate } from "@/lib/utils";
+import { appConfig } from "@/config/appConfig";
 
 export default function FinancialsPage() {
   const { customers, activeOrg, currentRole } = useTenant();
   const [filterStatus, setFilterStatus] = useState<string>("all");
+  const [selectedProduct, setSelectedProduct] = useState<string>("all");
 
   if (currentRole === "employee") {
     return (
@@ -37,29 +41,66 @@ export default function FinancialsPage() {
     );
   }
 
-  const totalPortfolioValue = customers.reduce(
+  // Extract unique products from customer records + defaults
+  const productOptions = Array.from(
+    new Set([
+      "all",
+      ...appConfig.defaultProducts,
+      ...customers.map((c) => c.primaryProduct || "GovStax"),
+    ])
+  );
+
+  // Filter customers by product & payment status
+  const productFilteredCustomers = customers.filter((c) => {
+    if (selectedProduct === "all") return true;
+    const prod = c.primaryProduct || "GovStax";
+    return prod.toLowerCase() === selectedProduct.toLowerCase();
+  });
+
+  const tableFilteredCustomers = productFilteredCustomers.filter((c) => {
+    if (filterStatus === "all") return true;
+    return c.financials.paymentStatus === filterStatus;
+  });
+
+  // Calculate metrics for selected product
+  const totalPortfolioValue = productFilteredCustomers.reduce(
     (acc, c) => acc + (c.financials.totalContractValue || 0),
     0
   );
 
-  const monthlyMRR = customers.reduce(
+  const totalBuildFees = productFilteredCustomers.reduce(
+    (acc, c) => acc + (c.financials.setupFee || 0),
+    0
+  );
+
+  const monthlyMRR = productFilteredCustomers.reduce(
     (acc, c) =>
       acc +
       (c.financials.billingCycle === "monthly"
         ? c.financials.recurringAmount
-        : c.financials.recurringAmount / 12),
+        : c.financials.billingCycle === "quarterly"
+        ? c.financials.recurringAmount / 3
+        : c.financials.billingCycle === "annually"
+        ? c.financials.recurringAmount / 12
+        : 0),
     0
   );
 
-  const annualARR = monthlyMRR * 12;
+  const annualARR = productFilteredCustomers.reduce(
+    (acc, c) =>
+      acc +
+      (c.financials.billingCycle === "monthly"
+        ? c.financials.recurringAmount * 12
+        : c.financials.billingCycle === "quarterly"
+        ? c.financials.recurringAmount * 4
+        : c.financials.billingCycle === "annually"
+        ? c.financials.recurringAmount
+        : 0),
+    0
+  );
 
   const avgContractValue =
-    customers.length > 0 ? totalPortfolioValue / customers.length : 0;
-
-  const filteredCustomers = customers.filter((c) => {
-    if (filterStatus === "all") return true;
-    return c.financials.paymentStatus === filterStatus;
-  });
+    productFilteredCustomers.length > 0 ? totalPortfolioValue / productFilteredCustomers.length : 0;
 
   return (
     <div className="space-y-6">
@@ -71,7 +112,7 @@ export default function FinancialsPage() {
             <span>Financials & Revenue Hub</span>
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Real-time MRR/ARR tracking, retainer agreements, client billing statuses, and renewal timelines.
+            Track MRR/ARR, one-time build fees, retainer agreements, and sort by software product.
           </p>
         </div>
 
@@ -88,13 +129,53 @@ export default function FinancialsPage() {
         </div>
       </div>
 
-      {/* KPI Stats */}
+      {/* Product Filter Bar */}
+      <div className="flex items-center gap-2 p-1.5 rounded-2xl bg-card border border-border/80 shadow-sm overflow-x-auto">
+        <div className="flex items-center gap-1.5 px-3 text-xs font-bold uppercase tracking-wider text-muted-foreground shrink-0">
+          <Layers className="h-4 w-4 text-indigo-500" />
+          <span>Product Filter:</span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          {productOptions.map((prod) => {
+            const isSelected = selectedProduct === prod;
+            const count =
+              prod === "all"
+                ? customers.length
+                : customers.filter(
+                    (c) => (c.primaryProduct || "GovStax").toLowerCase() === prod.toLowerCase()
+                  ).length;
+
+            return (
+              <button
+                key={prod}
+                onClick={() => setSelectedProduct(prod)}
+                className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all duration-150 ${
+                  isSelected
+                    ? "bg-primary text-primary-foreground shadow-sm shadow-primary/25"
+                    : "bg-muted/50 text-muted-foreground hover:text-foreground hover:bg-muted"
+                }`}
+              >
+                <span>{prod === "all" ? "All Products" : prod}</span>
+                <span
+                  className={`ml-1.5 text-[10px] px-1.5 py-0.2 rounded-full ${
+                    isSelected ? "bg-primary-foreground/20 text-white" : "bg-muted text-muted-foreground font-bold"
+                  }`}
+                >
+                  {count}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* KPI Stats (Segmented by selected product) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <Card className="bg-gradient-to-br from-card to-emerald-500/5 border-border/80">
           <CardContent className="p-5 flex items-center justify-between">
             <div>
               <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                Monthly Recurring (MRR)
+                {selectedProduct === "all" ? "Monthly Recurring (MRR)" : `${selectedProduct} MRR`}
               </p>
               <h3 className="text-2xl font-bold text-foreground mt-1">
                 {formatCurrency(monthlyMRR)}
@@ -113,13 +194,13 @@ export default function FinancialsPage() {
           <CardContent className="p-5 flex items-center justify-between">
             <div>
               <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                Annual Run Rate (ARR)
+                {selectedProduct === "all" ? "Annual Run Rate (ARR)" : `${selectedProduct} ARR`}
               </p>
               <h3 className="text-2xl font-bold text-foreground mt-1">
                 {formatCurrency(annualARR)}
               </h3>
               <p className="text-xs text-indigo-600 dark:text-indigo-400 font-medium mt-1">
-                Projected Annual Pace
+                Annual Subscription Pace
               </p>
             </div>
             <div className="h-12 w-12 rounded-xl bg-indigo-500/10 text-indigo-600 flex items-center justify-center">
@@ -132,13 +213,13 @@ export default function FinancialsPage() {
           <CardContent className="p-5 flex items-center justify-between">
             <div>
               <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                Total Portfolio Value
+                Total Contract Portfolio
               </p>
               <h3 className="text-2xl font-bold text-foreground mt-1">
                 {formatCurrency(totalPortfolioValue)}
               </h3>
               <p className="text-xs text-muted-foreground font-medium mt-1">
-                Cumulative Contract Book
+                Includes {formatCurrency(totalBuildFees)} Build Fees
               </p>
             </div>
             <div className="h-12 w-12 rounded-xl bg-violet-500/10 text-violet-600 flex items-center justify-center">
@@ -151,13 +232,13 @@ export default function FinancialsPage() {
           <CardContent className="p-5 flex items-center justify-between">
             <div>
               <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                Avg. Contract Value (ACV)
+                One-Time Build Fees
               </p>
               <h3 className="text-2xl font-bold text-foreground mt-1">
-                {formatCurrency(avgContractValue)}
+                {formatCurrency(totalBuildFees)}
               </h3>
-              <p className="text-xs text-muted-foreground font-medium mt-1">
-                Per Active Account
+              <p className="text-xs text-indigo-600 dark:text-indigo-400 font-medium mt-1">
+                Setup & Onboarding Book
               </p>
             </div>
             <div className="h-12 w-12 rounded-xl bg-slate-500/10 text-slate-600 flex items-center justify-center">
@@ -171,11 +252,18 @@ export default function FinancialsPage() {
       <Card className="border-border/80 shadow-sm overflow-hidden">
         <CardHeader className="p-5 pb-3 border-b border-border/60 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
-            <CardTitle className="text-base font-bold text-foreground">
-              Client Financial & Billing Schedules
-            </CardTitle>
+            <div className="flex items-center gap-2">
+              <CardTitle className="text-base font-bold text-foreground">
+                Client Financial & Billing Schedules
+              </CardTitle>
+              {selectedProduct !== "all" && (
+                <Badge variant="purple" className="text-[10px] font-bold">
+                  {selectedProduct} only
+                </Badge>
+              )}
+            </div>
             <CardDescription className="text-xs">
-              Direct billing records, recurring cycles, and renewal dates by client organization
+              Itemized build fees, ongoing retainer cycles, and renewal dates
             </CardDescription>
           </div>
 
@@ -202,66 +290,91 @@ export default function FinancialsPage() {
               <thead className="bg-muted/40 border-b border-border/60 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
                 <tr>
                   <th className="p-4 pl-6">Client Organization</th>
-                  <th className="p-4">Total Contract</th>
-                  <th className="p-4">Retainer / Cycle</th>
+                  <th className="p-4">Product</th>
+                  <th className="p-4">Build / Setup Fee</th>
+                  <th className="p-4">Ongoing Retainer</th>
+                  <th className="p-4">First Year Total</th>
                   <th className="p-4">Payment Status</th>
                   <th className="p-4">Next Renewal</th>
                   <th className="p-4 pr-6 text-right">Action</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border/60">
-                {filteredCustomers.length === 0 ? (
+                {tableFilteredCustomers.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="p-8 text-center text-muted-foreground">
-                      No billing records found matching the selected filter.
+                    <td colSpan={8} className="p-8 text-center text-muted-foreground">
+                      No billing records found matching the selected filters.
                     </td>
                   </tr>
                 ) : (
-                  filteredCustomers.map((cust) => (
-                    <tr key={cust.id} className="hover:bg-muted/20 transition-colors">
-                      <td className="p-4 pl-6 font-semibold text-foreground">
-                        <Link
-                          href={`/customers/${cust.id}`}
-                          className="hover:text-primary hover:underline flex items-center gap-2"
-                        >
-                          <Building2 className="h-4 w-4 text-indigo-500" />
-                          <span>{cust.name}</span>
-                        </Link>
-                      </td>
-                      <td className="p-4 font-bold text-foreground">
-                        {formatCurrency(cust.financials.totalContractValue)}
-                      </td>
-                      <td className="p-4 font-medium text-indigo-600 dark:text-indigo-400">
-                        {formatCurrency(cust.financials.recurringAmount)} / {cust.financials.billingCycle}
-                      </td>
-                      <td className="p-4">
-                        <Badge
-                          variant={
-                            cust.financials.paymentStatus === "current" ||
-                            cust.financials.paymentStatus === "paid"
-                              ? "success"
-                              : cust.financials.paymentStatus === "pending"
-                              ? "warning"
-                              : "destructive"
-                          }
-                          className="text-[10px] uppercase font-bold"
-                        >
-                          {cust.financials.paymentStatus}
-                        </Badge>
-                      </td>
-                      <td className="p-4 text-muted-foreground">
-                        {formatDate(cust.financials.nextRenewalDate)}
-                      </td>
-                      <td className="p-4 pr-6 text-right">
-                        <Link
-                          href={`/customers/${cust.id}`}
-                          className="text-primary font-semibold hover:underline"
-                        >
-                          View Account →
-                        </Link>
-                      </td>
-                    </tr>
-                  ))
+                  tableFilteredCustomers.map((cust) => {
+                    const setup = cust.financials.setupFee || 0;
+                    const recurring = cust.financials.recurringAmount || 0;
+                    const cycle = cust.financials.billingCycle;
+                    const firstYrRecurring =
+                      cycle === "monthly"
+                        ? recurring * 12
+                        : cycle === "quarterly"
+                        ? recurring * 4
+                        : cycle === "annually"
+                        ? recurring
+                        : 0;
+                    const firstYrTotal = setup + firstYrRecurring;
+
+                    return (
+                      <tr key={cust.id} className="hover:bg-muted/20 transition-colors">
+                        <td className="p-4 pl-6 font-semibold text-foreground">
+                          <Link
+                            href={`/customers/${cust.id}`}
+                            className="hover:text-primary hover:underline flex items-center gap-2"
+                          >
+                            <Building2 className="h-4 w-4 text-indigo-500" />
+                            <span>{cust.name}</span>
+                          </Link>
+                        </td>
+                        <td className="p-4">
+                          <Badge variant="purple" className="text-[10px] font-semibold">
+                            {cust.primaryProduct || "GovStax"}
+                          </Badge>
+                        </td>
+                        <td className="p-4 font-medium text-foreground">
+                          {setup > 0 ? formatCurrency(setup) : "—"}
+                        </td>
+                        <td className="p-4 font-semibold text-indigo-600 dark:text-indigo-400">
+                          {formatCurrency(recurring)} / {cycle === "annually" ? "yr" : cycle === "monthly" ? "mo" : cycle === "quarterly" ? "qtr" : "one-time"}
+                        </td>
+                        <td className="p-4 font-bold text-foreground">
+                          {formatCurrency(firstYrTotal || cust.financials.totalContractValue)}
+                        </td>
+                        <td className="p-4">
+                          <Badge
+                            variant={
+                              cust.financials.paymentStatus === "current" ||
+                              cust.financials.paymentStatus === "paid"
+                                ? "success"
+                                : cust.financials.paymentStatus === "pending"
+                                ? "warning"
+                                : "destructive"
+                            }
+                            className="text-[10px] uppercase font-bold"
+                          >
+                            {cust.financials.paymentStatus}
+                          </Badge>
+                        </td>
+                        <td className="p-4 text-muted-foreground">
+                          {formatDate(cust.financials.nextRenewalDate)}
+                        </td>
+                        <td className="p-4 pr-6 text-right">
+                          <Link
+                            href={`/customers/${cust.id}`}
+                            className="text-primary font-semibold hover:underline"
+                          >
+                            View Account →
+                          </Link>
+                        </td>
+                      </tr>
+                    );
+                  })
                 )}
               </tbody>
             </table>

@@ -24,7 +24,8 @@ import {
   Clock, 
   Sparkles,
   ExternalLink,
-  Share2
+  Share2,
+  Tag
 } from "lucide-react";
 import { useTenant } from "@/lib/firebase/tenantContext";
 import { Button } from "@/components/ui/button";
@@ -76,6 +77,9 @@ export default function CustomerDetailPage() {
   }
 
   const primaryContact = customer.contacts.find((c) => c.isPrimary) || customer.contacts[0];
+  const setup = customer.financials.setupFee || 0;
+  const recurring = customer.financials.recurringAmount || 0;
+  const cycle = customer.financials.billingCycle;
 
   const handleSignComplete = (
     docId: string,
@@ -104,6 +108,9 @@ export default function CustomerDetailPage() {
               <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-foreground">
                 {customer.name}
               </h1>
+              <Badge variant="purple" className="font-bold text-xs">
+                {customer.primaryProduct || "GovStax"}
+              </Badge>
               <Badge
                 variant={
                   customer.status === "active"
@@ -170,25 +177,37 @@ export default function CustomerDetailPage() {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <div className="p-4 rounded-xl bg-card border border-border/80 shadow-sm">
           <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground block">
-            Total Contract Value
+            One-Time Build Fee
           </span>
           <span className="text-xl font-bold text-foreground mt-1 block">
-            {formatCurrency(customer.financials.totalContractValue)}
+            {setup > 0 ? formatCurrency(setup) : "No Setup Fee"}
           </span>
           <span className="text-[11px] text-muted-foreground mt-0.5 block">
-            Full Term Value
+            Initial Setup & Build
           </span>
         </div>
 
         <div className="p-4 rounded-xl bg-card border border-border/80 shadow-sm">
           <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground block">
-            Recurring Retainer
+            Ongoing Retainer
           </span>
           <span className="text-xl font-bold text-indigo-600 dark:text-indigo-400 mt-1 block">
-            {formatCurrency(customer.financials.recurringAmount)}
+            {formatCurrency(recurring)}
           </span>
           <span className="text-[11px] text-emerald-600 dark:text-emerald-400 font-medium mt-0.5 block capitalize">
-            {customer.financials.billingCycle} Billing
+            {cycle === "annually" ? "Per Year" : cycle === "monthly" ? "Per Month" : cycle === "quarterly" ? "Per Quarter" : "One-Time"}
+          </span>
+        </div>
+
+        <div className="p-4 rounded-xl bg-card border border-border/80 shadow-sm">
+          <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground block">
+            Year 1 Total Investment
+          </span>
+          <span className="text-xl font-bold text-foreground mt-1 block">
+            {formatCurrency(customer.financials.totalContractValue)}
+          </span>
+          <span className="text-[11px] text-emerald-600 dark:text-emerald-400 font-medium mt-0.5 block">
+            Build Fee + First Year
           </span>
         </div>
 
@@ -201,18 +220,6 @@ export default function CustomerDetailPage() {
           </span>
           <span className="text-[11px] text-emerald-600 dark:text-emerald-400 font-medium mt-0.5 block">
             {customerContracts.filter((d) => d.status === "signed").length} Executed
-          </span>
-        </div>
-
-        <div className="p-4 rounded-xl bg-card border border-border/80 shadow-sm">
-          <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground block">
-            Active Deployments
-          </span>
-          <span className="text-xl font-bold text-foreground mt-1 block">
-            {customer.projects.length} System{customer.projects.length !== 1 ? "s" : ""}
-          </span>
-          <span className="text-[11px] text-muted-foreground mt-0.5 block">
-            {customer.projects.reduce((acc, p) => acc + (p.activeUsersCount || 0), 0)} Active Users
           </span>
         </div>
       </div>
@@ -286,6 +293,10 @@ export default function CustomerDetailPage() {
 
                 {/* Organization Details */}
                 <div className="pt-2 text-xs space-y-2 text-muted-foreground">
+                  <div className="flex items-center gap-2">
+                    <Layers className="h-4 w-4 text-indigo-500 shrink-0" />
+                    <span>Product: <strong className="text-foreground">{customer.primaryProduct || "GovStax"}</strong></span>
+                  </div>
                   <div className="flex items-center gap-2">
                     <MapPin className="h-4 w-4 text-muted-foreground shrink-0" />
                     <span>
@@ -458,7 +469,6 @@ export default function CustomerDetailPage() {
 
                   {/* Document Actions */}
                   <div className="flex items-center gap-2 shrink-0">
-                    {/* E-Signature Button if not yet signed */}
                     {doc.status !== "signed" && (
                       <Button
                         onClick={() => setSignDoc(doc)}
@@ -471,7 +481,6 @@ export default function CustomerDetailPage() {
                       </Button>
                     )}
 
-                    {/* Copy Signing Link */}
                     <Button
                       onClick={() => {
                         const url = `${window.location.origin}/sign/${doc.id}`;
@@ -487,7 +496,6 @@ export default function CustomerDetailPage() {
                       <span>Share Link</span>
                     </Button>
 
-                    {/* Print Button */}
                     <Button
                       onClick={() =>
                         printContractPdf({
@@ -505,7 +513,6 @@ export default function CustomerDetailPage() {
                       <span>Print</span>
                     </Button>
 
-                    {/* Download PDF */}
                     <Button
                       onClick={() =>
                         downloadContractPdf({

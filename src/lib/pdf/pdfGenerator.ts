@@ -84,14 +84,23 @@ export function generateContractPdf({
 
   // 4. Client Information Box
   if (customer) {
+    const setupFee = customer.financials.setupFee || 0;
+    const recurring = customer.financials.recurringAmount || 0;
+    const cycle = customer.financials.billingCycle;
+    const prod = customer.primaryProduct || "GovStax";
+
+    const financialTermsText = setupFee > 0
+      ? `Product / Platform: ${prod}\nOne-Time Build Fee: ${formatCurrency(setupFee)}\nOngoing Retainer: ${formatCurrency(recurring)} / ${cycle}\nYear 1 Total Investment: ${formatCurrency(customer.financials.totalContractValue)}\nPayment Status: ${customer.financials.paymentStatus.toUpperCase()}`
+      : `Product / Platform: ${prod}\nRecurring Retainer: ${formatCurrency(recurring)} / ${cycle}\nTotal Contract Value: ${formatCurrency(customer.financials.totalContractValue)}\nPayment Status: ${customer.financials.paymentStatus.toUpperCase()}`;
+
     autoTable(doc, {
       startY: 72,
       margin: { left: 20, right: 20 },
-      head: [["PREPARED FOR / CLIENT", "AGREEMENT FINANCIAL TERMS"]],
+      head: [["PREPARED FOR / CLIENT", "AGREEMENT FINANCIAL & PRODUCT TERMS"]],
       body: [
         [
           `${customer.name}\n${customer.contacts[0]?.name || "Executive Contact"} (${customer.contacts[0]?.title || "Client"})\n${customer.address?.street || ""}\n${customer.address?.city || ""}, ${customer.address?.state || ""} ${customer.address?.zip || ""}\nEmail: ${customer.contacts[0]?.email || "—"}`,
-          `Contract Value: ${formatCurrency(customer.financials.totalContractValue)}\nRecurring Amount: ${formatCurrency(customer.financials.recurringAmount)} / ${customer.financials.billingCycle}\nPayment Status: ${customer.financials.paymentStatus.toUpperCase()}`,
+          financialTermsText,
         ],
       ],
       theme: "striped",

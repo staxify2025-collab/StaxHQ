@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { 
   Dialog, 
   DialogContent, 
@@ -14,6 +14,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Customer, CustomerType, CustomerStatus, BillingCycle } from "@/types/crm";
 import { useTenant } from "@/lib/firebase/tenantContext";
+import { appConfig } from "@/config/appConfig";
+import { formatCurrency } from "@/lib/utils";
+import { Layers, Sparkles, DollarSign, Calculator } from "lucide-react";
 
 interface CustomerModalProps {
   isOpen: boolean;
@@ -25,6 +28,8 @@ export function CustomerModal({ isOpen, onClose, initialData }: CustomerModalPro
   const { addCustomer, updateCustomer } = useTenant();
 
   const [name, setName] = useState(initialData?.name || "");
+  const [primaryProduct, setPrimaryProduct] = useState(initialData?.primaryProduct || "GovStax");
+  const [customProduct, setCustomProduct] = useState("");
   const [type, setType] = useState<CustomerType>(initialData?.type || "customer");
   const [status, setStatus] = useState<CustomerStatus>(initialData?.status || "active");
   const [industry, setIndustry] = useState(initialData?.industry || "");
@@ -41,16 +46,89 @@ export function CustomerModal({ isOpen, onClose, initialData }: CustomerModalPro
   const [contactPhone, setContactPhone] = useState(initialData?.contacts[0]?.phone || "");
 
   // Financials
-  const [totalValue, setTotalValue] = useState(initialData?.financials.totalContractValue || 0);
-  const [recurringAmount, setRecurringAmount] = useState(initialData?.financials.recurringAmount || 0);
-  const [billingCycle, setBillingCycle] = useState<BillingCycle>(initialData?.financials.billingCycle || "monthly");
+  const [setupFee, setSetupFee] = useState<number>(initialData?.financials.setupFee || 0);
+  const [recurringAmount, setRecurringAmount] = useState<number>(initialData?.financials.recurringAmount || 0);
+  const [billingCycle, setBillingCycle] = useState<BillingCycle>(initialData?.financials.billingCycle || "annually");
+  const [totalValue, setTotalValue] = useState<number>(initialData?.financials.totalContractValue || 0);
+
+  // Synchronize state when initialData changes
+  useEffect(() => {
+    if (initialData) {
+      setName(initialData.name || "");
+      setPrimaryProduct(initialData.primaryProduct || "GovStax");
+      setType(initialData.type || "customer");
+      setStatus(initialData.status || "active");
+      setIndustry(initialData.industry || "");
+      setWebsite(initialData.website || "");
+      setStreet(initialData.address?.street || "");
+      setCity(initialData.address?.city || "");
+      setState(initialData.address?.state || "AL");
+      setZip(initialData.address?.zip || "");
+      setContactName(initialData.contacts[0]?.name || "");
+      setContactTitle(initialData.contacts[0]?.title || "");
+      setContactEmail(initialData.contacts[0]?.email || "");
+      setContactPhone(initialData.contacts[0]?.phone || "");
+      setSetupFee(initialData.financials.setupFee || 0);
+      setRecurringAmount(initialData.financials.recurringAmount || 0);
+      setBillingCycle(initialData.financials.billingCycle || "annually");
+      setTotalValue(initialData.financials.totalContractValue || 0);
+    }
+  }, [initialData]);
+
+  // Compute first-year total automatically
+  const computedFirstYearRecurring =
+    billingCycle === "monthly"
+      ? recurringAmount * 12
+      : billingCycle === "quarterly"
+      ? recurringAmount * 4
+      : billingCycle === "annually"
+      ? recurringAmount
+      : 0;
+
+  const computedFirstYearTotal = setupFee + computedFirstYearRecurring;
+
+  // Auto-fill total contract value on setup/recurring change if user hasn't overridden
+  const handleSetupFeeChange = (val: number) => {
+    setSetupFee(val);
+    setTotalValue(val + computedFirstYearRecurring);
+  };
+
+  const handleRecurringAmountChange = (val: number) => {
+    setRecurringAmount(val);
+    const firstYr =
+      billingCycle === "monthly"
+        ? val * 12
+        : billingCycle === "quarterly"
+        ? val * 4
+        : billingCycle === "annually"
+        ? val
+        : 0;
+    setTotalValue(setupFee + firstYr);
+  };
+
+  const handleBillingCycleChange = (cycle: BillingCycle) => {
+    setBillingCycle(cycle);
+    const firstYr =
+      cycle === "monthly"
+        ? recurringAmount * 12
+        : cycle === "quarterly"
+        ? recurringAmount * 4
+        : cycle === "annually"
+        ? recurringAmount
+        : 0;
+    setTotalValue(setupFee + firstYr);
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) return;
 
+    const resolvedProduct =
+      primaryProduct === "custom" ? customProduct || "Custom Software" : primaryProduct;
+
     const customerData = {
       name,
+      primaryProduct: resolvedProduct,
       type,
       status,
       industry: industry || "General Business",
@@ -72,15 +150,26 @@ export function CustomerModal({ isOpen, onClose, initialData }: CustomerModalPro
         },
       ],
       financials: {
-        totalContractValue: Number(totalValue) || 0,
+        setupFee: Number(setupFee) || 0,
         recurringAmount: Number(recurringAmount) || 0,
         billingCycle,
+        totalContractValue: Number(totalValue) || computedFirstYearTotal,
         paymentStatus: initialData?.financials.paymentStatus || "current",
         startDate: initialData?.financials.startDate || Date.now(),
         nextRenewalDate: initialData?.financials.nextRenewalDate || Date.now() + 365 * 86400000,
       },
-      projects: initialData?.projects || [],
-      tags: initialData?.tags || [type === "customer" ? "Active Account" : "Prospect Lead"],
+      projects: initialData?.projects || [
+        {
+          id: `proj-${Date.now()}`,
+          name: `${resolvedProduct} Deployment`,
+          description: `Active instance of ${resolvedProduct} for ${name}`,
+          status: "live",
+          productsUsed: [resolvedProduct],
+          activeUsersCount: 10,
+          updatedAt: Date.now(),
+        },
+      ],
+      tags: initialData?.tags || [resolvedProduct, type === "customer" ? "Active Account" : "Prospect Lead"],
       notesCount: initialData?.notesCount || 0,
       documentsCount: initialData?.documentsCount || 0,
     };
@@ -102,7 +191,7 @@ export function CustomerModal({ isOpen, onClose, initialData }: CustomerModalPro
             {initialData ? "Edit Customer / Account" : "Add New Customer or Prospect"}
           </DialogTitle>
           <DialogDescription>
-            Enter organization details, primary executive contact, and financial contract scope.
+            Enter organization details, assigned software platform, primary executive contact, and financial contract scope.
           </DialogDescription>
         </DialogHeader>
 
@@ -110,7 +199,7 @@ export function CustomerModal({ isOpen, onClose, initialData }: CustomerModalPro
           {/* Basic Org Details */}
           <div className="space-y-4">
             <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
-              1. Organization Profile
+              1. Organization & Product Profile
             </h4>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
@@ -122,6 +211,33 @@ export function CustomerModal({ isOpen, onClose, initialData }: CustomerModalPro
                   placeholder="e.g. Town of Rehobeth"
                   required
                 />
+              </div>
+
+              {/* Product Selection */}
+              <div>
+                <Label htmlFor="productSelect">Deployed Software / Product *</Label>
+                <select
+                  id="productSelect"
+                  value={primaryProduct}
+                  onChange={(e) => setPrimaryProduct(e.target.value)}
+                  className="w-full h-10 px-3 rounded-lg border border-input bg-background text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary font-medium"
+                >
+                  {appConfig.defaultProducts.map((p) => (
+                    <option key={p} value={p}>
+                      {p}
+                    </option>
+                  ))}
+                  <option value="custom">Other / Custom Product...</option>
+                </select>
+                {primaryProduct === "custom" && (
+                  <Input
+                    className="mt-2 text-xs"
+                    placeholder="Enter custom product name"
+                    value={customProduct}
+                    onChange={(e) => setCustomProduct(e.target.value)}
+                    required
+                  />
+                )}
               </div>
 
               <div>
@@ -148,7 +264,7 @@ export function CustomerModal({ isOpen, onClose, initialData }: CustomerModalPro
                 </select>
               </div>
 
-              <div>
+              <div className="md:col-span-2">
                 <Label htmlFor="status">Pipeline Stage</Label>
                 <select
                   id="status"
@@ -254,44 +370,114 @@ export function CustomerModal({ isOpen, onClose, initialData }: CustomerModalPro
 
           {/* Financial & Contract Scope */}
           <div className="space-y-4 pt-2 border-t border-border/60">
-            <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
-              3. Contract Financials & Retainer
-            </h4>
+            <div className="flex items-center justify-between">
+              <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                3. Contract Financials, Build Fees & Retainers
+              </h4>
+              <span className="text-[11px] text-indigo-600 dark:text-indigo-400 font-semibold flex items-center gap-1">
+                <Calculator className="h-3.5 w-3.5" />
+                <span>Auto-calculates Year 1 total</span>
+              </span>
+            </div>
+
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {/* Build Fee */}
               <div>
-                <Label htmlFor="totalValue">Total Contract Value ($)</Label>
+                <Label htmlFor="setupFee" className="flex items-center justify-between">
+                  <span>One-Time Build Fee ($)</span>
+                  <span className="text-[10px] text-muted-foreground">Setup</span>
+                </Label>
                 <Input
-                  id="totalValue"
+                  id="setupFee"
                   type="number"
-                  value={totalValue}
-                  onChange={(e) => setTotalValue(Number(e.target.value))}
-                  placeholder="48000"
+                  value={setupFee}
+                  onChange={(e) => handleSetupFeeChange(Number(e.target.value))}
+                  placeholder="2500"
                 />
               </div>
+
+              {/* Recurring Retainer */}
               <div>
-                <Label htmlFor="recurringAmount">Recurring Amount ($)</Label>
+                <Label htmlFor="recurringAmount" className="flex items-center justify-between">
+                  <span>Ongoing Retainer ($)</span>
+                  <span className="text-[10px] text-muted-foreground">Recurring</span>
+                </Label>
                 <Input
                   id="recurringAmount"
                   type="number"
                   value={recurringAmount}
-                  onChange={(e) => setRecurringAmount(Number(e.target.value))}
-                  placeholder="4000"
+                  onChange={(e) => handleRecurringAmountChange(Number(e.target.value))}
+                  placeholder="5000"
                 />
               </div>
+
+              {/* Billing Frequency */}
               <div>
                 <Label htmlFor="billingCycle">Billing Frequency</Label>
                 <select
                   id="billingCycle"
                   value={billingCycle}
-                  onChange={(e) => setBillingCycle(e.target.value as BillingCycle)}
-                  className="w-full h-10 px-3 rounded-lg border border-input bg-background text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                  onChange={(e) => handleBillingCycleChange(e.target.value as BillingCycle)}
+                  className="w-full h-10 px-3 rounded-lg border border-input bg-background text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary font-medium"
                 >
-                  <option value="monthly">Monthly</option>
-                  <option value="quarterly">Quarterly</option>
-                  <option value="annually">Annually</option>
-                  <option value="one-time">One-Time Project</option>
+                  <option value="annually">Annually ($/year)</option>
+                  <option value="monthly">Monthly ($/mo)</option>
+                  <option value="quarterly">Quarterly ($/quarter)</option>
+                  <option value="one-time">One-Time Only (No Retainer)</option>
                 </select>
               </div>
+            </div>
+
+            {/* LIVE CALCULATION PREVIEW BOX */}
+            <div className="p-4 rounded-xl bg-gradient-to-br from-indigo-500/10 via-purple-500/10 to-card border border-indigo-500/30 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                  <Sparkles className="h-4 w-4 text-indigo-600" />
+                  <span>Client Investment Breakdown</span>
+                </span>
+                <span className="text-xs font-bold text-indigo-700 dark:text-indigo-300">
+                  Year 1: {formatCurrency(computedFirstYearTotal)}
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs pt-1 border-t border-indigo-500/20">
+                <div className="text-muted-foreground">
+                  <span className="font-medium text-foreground block">First Year (Initial Year):</span>
+                  {setupFee > 0 ? (
+                    <span>
+                      {formatCurrency(setupFee)} Build Fee + {formatCurrency(computedFirstYearRecurring)} Retainer = <strong className="text-foreground">{formatCurrency(computedFirstYearTotal)}</strong>
+                    </span>
+                  ) : (
+                    <span>{formatCurrency(computedFirstYearRecurring)} ({billingCycle})</span>
+                  )}
+                </div>
+
+                <div className="text-muted-foreground sm:text-right">
+                  <span className="font-medium text-foreground block">Subsequent Years (Renewal):</span>
+                  {billingCycle !== "one-time" ? (
+                    <strong className="text-emerald-600 dark:text-emerald-400">
+                      {formatCurrency(recurringAmount)} / {billingCycle === "annually" ? "year" : billingCycle === "monthly" ? "month" : "quarter"}
+                    </strong>
+                  ) : (
+                    <span className="text-muted-foreground">None (One-time project)</span>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Total Contract Value Override */}
+            <div>
+              <Label htmlFor="totalValue" className="flex items-center justify-between">
+                <span>Total Contract Value Commitment ($)</span>
+                <span className="text-[10px] text-muted-foreground">Defaults to Year 1 Total or Multi-Year Total</span>
+              </Label>
+              <Input
+                id="totalValue"
+                type="number"
+                value={totalValue}
+                onChange={(e) => setTotalValue(Number(e.target.value))}
+                placeholder="7500"
+              />
             </div>
           </div>
 

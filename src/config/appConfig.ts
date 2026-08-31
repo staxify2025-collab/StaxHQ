@@ -16,7 +16,15 @@ export interface CompanyBranding {
 export const appConfig: {
   brand: CompanyBranding;
   demoBrand: CompanyBranding;
+  defaultProducts: string[];
 } = {
+  defaultProducts: [
+    "GovStax",
+    "Company Pulse",
+    "StaxEcho",
+    "TenantAgent",
+    "Custom Software Build",
+  ],
   brand: {
     name: "StaxHQ",
     shortName: "Stax",

@@ -17,7 +17,8 @@ import {
   Filter,
   CheckCircle2,
   Clock,
-  Sparkles
+  Sparkles,
+  Layers
 } from "lucide-react";
 import { useTenant } from "@/lib/firebase/tenantContext";
 import { Button } from "@/components/ui/button";
@@ -26,25 +27,46 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { CustomerModal } from "@/components/customers/CustomerModal";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { CustomerType } from "@/types/crm";
+import { appConfig } from "@/config/appConfig";
 
 export default function CustomersPage() {
   const { customers, isDemoMode } = useTenant();
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedTab, setSelectedTab] = useState<string>("all");
+  const [selectedProduct, setSelectedProduct] = useState<string>("all");
   const [isModalOpen, setIsModalOpen] = useState(false);
+
+  const productOptions = Array.from(
+    new Set([
+      "all",
+      ...appConfig.defaultProducts,
+      ...customers.map((c) => c.primaryProduct || "GovStax"),
+    ])
+  );
 
   const filteredCustomers = customers.filter((c) => {
     const matchesSearch =
       c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      c.primaryProduct?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       c.industry?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      c.contacts.some((ct) => ct.name.toLowerCase().includes(searchQuery.toLowerCase()) || ct.email.toLowerCase().includes(searchQuery.toLowerCase())) ||
+      c.contacts.some(
+        (ct) =>
+          ct.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          ct.email.toLowerCase().includes(searchQuery.toLowerCase())
+      ) ||
       c.tags.some((t) => t.toLowerCase().includes(searchQuery.toLowerCase()));
 
-    if (selectedTab === "all") return matchesSearch;
-    if (selectedTab === "active") return matchesSearch && c.status === "active";
-    if (selectedTab === "prospects") return matchesSearch && (c.type === "prospect" || c.status !== "active");
-    if (selectedTab === "partners") return matchesSearch && c.type === "partner";
-    return matchesSearch;
+    const matchesProduct =
+      selectedProduct === "all"
+        ? true
+        : (c.primaryProduct || "GovStax").toLowerCase() === selectedProduct.toLowerCase();
+
+    if (selectedTab === "all") return matchesSearch && matchesProduct;
+    if (selectedTab === "active") return matchesSearch && matchesProduct && c.status === "active";
+    if (selectedTab === "prospects")
+      return matchesSearch && matchesProduct && (c.type === "prospect" || c.status !== "active");
+    if (selectedTab === "partners") return matchesSearch && matchesProduct && c.type === "partner";
+    return matchesSearch && matchesProduct;
   });
 
   const totalPortfolioValue = customers.reduce(
@@ -161,39 +183,56 @@ export default function CustomersPage() {
         </Card>
       </div>
 
-      {/* Filter Tabs & Search Bar */}
+      {/* Filter Tabs, Product Filter & Search Bar */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pt-2">
-        <div className="flex items-center gap-1.5 p-1 bg-muted/60 rounded-xl w-fit">
-          <button
-            onClick={() => setSelectedTab("all")}
-            className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-              selectedTab === "all"
-                ? "bg-card text-foreground shadow-sm"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Status Tabs */}
+          <div className="flex items-center gap-1.5 p-1 bg-muted/60 rounded-xl w-fit">
+            <button
+              onClick={() => setSelectedTab("all")}
+              className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                selectedTab === "all"
+                  ? "bg-card text-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              All Accounts ({customers.length})
+            </button>
+            <button
+              onClick={() => setSelectedTab("active")}
+              className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                selectedTab === "active"
+                  ? "bg-card text-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              Active ({activeCount})
+            </button>
+            <button
+              onClick={() => setSelectedTab("prospects")}
+              className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                selectedTab === "prospects"
+                  ? "bg-card text-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              Prospects ({prospectCount})
+            </button>
+          </div>
+
+          {/* Product Dropdown */}
+          <select
+            value={selectedProduct}
+            onChange={(e) => setSelectedProduct(e.target.value)}
+            className="text-xs h-9 px-3 rounded-xl border border-input bg-card text-foreground focus:outline-none focus:ring-1 focus:ring-primary shadow-sm font-medium"
           >
-            All Accounts ({customers.length})
-          </button>
-          <button
-            onClick={() => setSelectedTab("active")}
-            className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-              selectedTab === "active"
-                ? "bg-card text-foreground shadow-sm"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            Active Customers ({activeCount})
-          </button>
-          <button
-            onClick={() => setSelectedTab("prospects")}
-            className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-              selectedTab === "prospects"
-                ? "bg-card text-foreground shadow-sm"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            Prospects & Leads ({prospectCount})
-          </button>
+            <option value="all">All Products</option>
+            {productOptions.filter((p) => p !== "all").map((prod) => (
+              <option key={prod} value={prod}>
+                Product: {prod}
+              </option>
+            ))}
+          </select>
         </div>
 
         <div className="relative w-full md:w-80">
@@ -202,7 +241,7 @@ export default function CustomersPage() {
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search by name, contact, industry..."
+            placeholder="Search by name, product, contact..."
             className="w-full pl-9 pr-4 py-2 bg-card border border-input rounded-xl text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary shadow-sm"
           />
         </div>
@@ -231,7 +270,12 @@ export default function CustomersPage() {
           </div>
         ) : (
           filteredCustomers.map((customer) => {
-            const primaryContact = customer.contacts.find((c) => c.isPrimary) || customer.contacts[0];
+            const primaryContact =
+              customer.contacts.find((c) => c.isPrimary) || customer.contacts[0];
+            const setup = customer.financials.setupFee || 0;
+            const recurring = customer.financials.recurringAmount || 0;
+            const cycle = customer.financials.billingCycle;
+
             return (
               <Link
                 key={customer.id}
@@ -247,9 +291,14 @@ export default function CustomersPage() {
                             {customer.name}
                           </h3>
                         </div>
-                        <p className="text-xs text-muted-foreground mt-0.5">
-                          {customer.industry || "B2B Account"}
-                        </p>
+                        <div className="flex items-center gap-1.5 mt-1">
+                          <Badge variant="purple" className="text-[10px] font-semibold py-0">
+                            {customer.primaryProduct || "GovStax"}
+                          </Badge>
+                          <span className="text-xs text-muted-foreground">
+                            • {customer.industry || "B2B Account"}
+                          </span>
+                        </div>
                       </div>
                       <Badge
                         variant={
@@ -285,11 +334,11 @@ export default function CustomersPage() {
                       </div>
                     )}
 
-                    {/* Address & Financials */}
+                    {/* Financial Summary */}
                     <div className="pt-2 border-t border-border/50 flex items-center justify-between text-xs">
                       <div>
                         <span className="text-[10px] uppercase tracking-wider text-muted-foreground block">
-                          Contract Value
+                          Year 1 Total
                         </span>
                         <span className="font-bold text-foreground">
                           {formatCurrency(customer.financials.totalContractValue)}
@@ -297,10 +346,10 @@ export default function CustomersPage() {
                       </div>
                       <div className="text-right">
                         <span className="text-[10px] uppercase tracking-wider text-muted-foreground block">
-                          Retainer / Fee
+                          {setup > 0 ? `Build: ${formatCurrency(setup)} + Retainer` : "Retainer / Renewal"}
                         </span>
                         <span className="font-semibold text-indigo-600 dark:text-indigo-400">
-                          {formatCurrency(customer.financials.recurringAmount)}/{customer.financials.billingCycle === "monthly" ? "mo" : "yr"}
+                          {formatCurrency(recurring)}/{cycle === "annually" ? "yr" : cycle === "monthly" ? "mo" : "qtr"}
                         </span>
                       </div>
                     </div>
@@ -310,7 +359,9 @@ export default function CustomersPage() {
                       <div className="flex items-center gap-1">
                         <MapPin className="h-3 w-3" />
                         <span>
-                          {customer.address?.city ? `${customer.address.city}, ${customer.address.state}` : "Direct Client"}
+                          {customer.address?.city
+                            ? `${customer.address.city}, ${customer.address.state}`
+                            : "Direct Client"}
                         </span>
                       </div>
                       <div className="flex items-center gap-1 font-semibold text-primary group-hover:translate-x-0.5 transition-transform">
