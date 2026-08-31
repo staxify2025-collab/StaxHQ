@@ -11,7 +11,9 @@ import {
   Save, 
   Check, 
   Sliders,
-  FileCheck
+  FileCheck,
+  Layers,
+  Trash2
 } from "lucide-react";
 import { useTenant } from "@/lib/firebase/tenantContext";
 import { Button } from "@/components/ui/button";
@@ -29,7 +31,11 @@ export default function AdminPage() {
     currentRole, 
     resetDemoData, 
     isDemoMode,
-    toggleDemoMode 
+    toggleDemoMode,
+    products,
+    addProduct,
+    deleteProduct,
+    customers
   } = useTenant();
 
   const [name, setName] = useState(activeOrg.name);
@@ -38,6 +44,7 @@ export default function AdminPage() {
   const [phone, setPhone] = useState(activeOrg.phone || "");
   const [email, setEmail] = useState(activeOrg.email || "");
   const [watermark, setWatermark] = useState(activeOrg.defaultWatermark || "CONFIDENTIAL");
+  const [newProductName, setNewProductName] = useState("");
   const [isSaved, setIsSaved] = useState(false);
 
   if (currentRole === "employee") {
@@ -184,6 +191,89 @@ export default function AdminPage() {
           </CardContent>
         </Card>
       </form>
+
+      {/* Software Products & Platform Portfolio Manager */}
+      <Card className="border-border/80">
+        <CardHeader className="p-6 pb-4 border-b border-border/60">
+          <CardTitle className="text-base font-bold text-foreground flex items-center gap-2">
+            <Layers className="h-5 w-5 text-indigo-600" />
+            <span>Software Products & Platform Catalog</span>
+          </CardTitle>
+          <CardDescription className="text-xs">
+            Add new products as your company expands. Products added here immediately appear in customer dropdowns and financial sorting.
+          </CardDescription>
+        </CardHeader>
+
+        <CardContent className="p-6 space-y-4">
+          {/* Add New Product Input Bar */}
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (!newProductName.trim()) return;
+              addProduct(newProductName.trim());
+              setNewProductName("");
+            }}
+            className="flex items-center gap-2"
+          >
+            <Input
+              placeholder="e.g. CityDesk, AutoPulse, StaxVault..."
+              value={newProductName}
+              onChange={(e) => setNewProductName(e.target.value)}
+              className="flex-1 text-xs"
+            />
+            <Button type="submit" variant="gradient" size="sm" className="gap-1.5 shrink-0">
+              <span>+ Add Product</span>
+            </Button>
+          </form>
+
+          {/* Active Product List */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+            {products.map((prod) => {
+              const custCount = customers.filter(
+                (c) => (c.primaryProduct || "GovStax").toLowerCase() === prod.toLowerCase()
+              ).length;
+
+              return (
+                <div
+                  key={prod}
+                  className="flex items-center justify-between p-3 rounded-xl bg-muted/40 border border-border/70 text-xs"
+                >
+                  <div className="flex items-center gap-2.5">
+                    <div className="h-8 w-8 rounded-lg bg-indigo-500/10 text-indigo-600 flex items-center justify-center font-bold">
+                      <Layers className="h-4 w-4" />
+                    </div>
+                    <div>
+                      <p className="font-bold text-foreground">{prod}</p>
+                      <p className="text-[11px] text-muted-foreground">
+                        {custCount} active account{custCount !== 1 ? "s" : ""}
+                      </p>
+                    </div>
+                  </div>
+
+                  {products.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (
+                          confirm(
+                            `Are you sure you want to remove "${prod}" from the product catalog?`
+                          )
+                        ) {
+                          deleteProduct(prod);
+                        }
+                      }}
+                      className="text-muted-foreground/60 hover:text-rose-600 p-1.5 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/50 transition-colors"
+                      title="Remove product"
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Team Member Roles */}
       <Card className="border-border/80">

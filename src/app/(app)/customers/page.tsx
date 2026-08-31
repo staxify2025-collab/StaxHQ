@@ -30,19 +30,13 @@ import { CustomerType } from "@/types/crm";
 import { appConfig } from "@/config/appConfig";
 
 export default function CustomersPage() {
-  const { customers, isDemoMode } = useTenant();
+  const { customers, isDemoMode, products } = useTenant();
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedTab, setSelectedTab] = useState<string>("all");
   const [selectedProduct, setSelectedProduct] = useState<string>("all");
   const [isModalOpen, setIsModalOpen] = useState(false);
 
-  const productOptions = Array.from(
-    new Set([
-      "all",
-      ...appConfig.defaultProducts,
-      ...customers.map((c) => c.primaryProduct || "GovStax"),
-    ])
-  );
+  const productOptions = Array.from(new Set(["all", ...products]));
 
   const filteredCustomers = customers.filter((c) => {
     const matchesSearch =

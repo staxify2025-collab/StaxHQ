@@ -25,7 +25,7 @@ interface CustomerModalProps {
 }
 
 export function CustomerModal({ isOpen, onClose, initialData }: CustomerModalProps) {
-  const { addCustomer, updateCustomer } = useTenant();
+  const { addCustomer, updateCustomer, products } = useTenant();
 
   const [name, setName] = useState(initialData?.name || "");
   const [primaryProduct, setPrimaryProduct] = useState(initialData?.primaryProduct || "GovStax");
@@ -222,7 +222,7 @@ export function CustomerModal({ isOpen, onClose, initialData }: CustomerModalPro
                   onChange={(e) => setPrimaryProduct(e.target.value)}
                   className="w-full h-10 px-3 rounded-lg border border-input bg-background text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary font-medium"
                 >
-                  {appConfig.defaultProducts.map((p) => (
+                  {products.map((p) => (
                     <option key={p} value={p}>
                       {p}
                     </option>

@@ -34,8 +34,11 @@ interface TenantContextType {
   contracts: ContractDocument[];
   notes: ActivityNote[];
   events: CalendarEvent[];
+  products: string[];
 
   // Mutations
+  addProduct: (name: string) => void;
+  deleteProduct: (name: string) => void;
   addCustomer: (customer: Omit<Customer, "id" | "orgId" | "createdAt" | "updatedAt">) => Customer;
   updateCustomer: (id: string, updates: Partial<Customer>) => void;
   deleteCustomer: (id: string) => void;
@@ -61,6 +64,7 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
   const [isDemoMode, setIsDemoMode] = useState<boolean>(false);
   const [currentRole, setCurrentRole] = useState<UserRole>("admin");
   const [organizations, setOrganizations] = useState<Organization[]>(initialOrganizations);
+  const [products, setProducts] = useState<string[]>(appConfig.defaultProducts);
   
   // Scoped Store States
   const [primaryCustomers, setPrimaryCustomers] = useState<Customer[]>([]);
@@ -83,6 +87,13 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
 
       const savedRole = localStorage.getItem("staxhq_user_role") as UserRole;
       if (savedRole) setCurrentRole(savedRole);
+
+      const savedProducts = localStorage.getItem("staxhq_products");
+      if (savedProducts) {
+        setProducts(JSON.parse(savedProducts));
+      } else {
+        setProducts(appConfig.defaultProducts);
+      }
 
       const savedPrimaryCust = localStorage.getItem("staxhq_primary_customers");
       if (savedPrimaryCust) setPrimaryCustomers(JSON.parse(savedPrimaryCust));
@@ -318,6 +329,20 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
     localStorage.setItem("staxhq_demo_events", JSON.stringify(demoCalendarEvents));
   };
 
+  const addProduct = (productName: string) => {
+    const trimmed = productName.trim();
+    if (!trimmed || products.some((p) => p.toLowerCase() === trimmed.toLowerCase())) return;
+    const next = [...products, trimmed];
+    setProducts(next);
+    localStorage.setItem("staxhq_products", JSON.stringify(next));
+  };
+
+  const deleteProduct = (productName: string) => {
+    const next = products.filter((p) => p.toLowerCase() !== productName.toLowerCase());
+    setProducts(next);
+    localStorage.setItem("staxhq_products", JSON.stringify(next));
+  };
+
   return (
     <TenantContext.Provider
       value={{
@@ -332,6 +357,9 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
         contracts,
         notes,
         events,
+        products,
+        addProduct,
+        deleteProduct,
         addCustomer,
         updateCustomer,
         deleteCustomer,

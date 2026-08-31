@@ -25,7 +25,7 @@ import { formatCurrency, formatDate } from "@/lib/utils";
 import { appConfig } from "@/config/appConfig";
 
 export default function FinancialsPage() {
-  const { customers, activeOrg, currentRole } = useTenant();
+  const { customers, activeOrg, currentRole, products } = useTenant();
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [selectedProduct, setSelectedProduct] = useState<string>("all");
 
@@ -41,14 +41,8 @@ export default function FinancialsPage() {
     );
   }
 
-  // Extract unique products from customer records + defaults
-  const productOptions = Array.from(
-    new Set([
-      "all",
-      ...appConfig.defaultProducts,
-      ...customers.map((c) => c.primaryProduct || "GovStax"),
-    ])
-  );
+  // Extract products from tenant context
+  const productOptions = Array.from(new Set(["all", ...products]));
 
   // Filter customers by product & payment status
   const productFilteredCustomers = customers.filter((c) => {
