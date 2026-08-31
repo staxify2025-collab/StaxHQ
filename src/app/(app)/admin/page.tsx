@@ -13,7 +13,9 @@ import {
   Sliders,
   FileCheck,
   Layers,
-  Trash2
+  Trash2,
+  Plus,
+  UserPlus
 } from "lucide-react";
 import { useTenant } from "@/lib/firebase/tenantContext";
 import { Button } from "@/components/ui/button";
@@ -22,6 +24,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { appConfig } from "@/config/appConfig";
 import { getInitials } from "@/lib/utils";
+import { UserRole } from "@/types/crm";
 
 export default function AdminPage() {
   const { 
@@ -35,6 +38,9 @@ export default function AdminPage() {
     products,
     addProduct,
     deleteProduct,
+    addTeamMember,
+    updateTeamMember,
+    deleteTeamMember,
     customers
   } = useTenant();
 
@@ -45,6 +51,10 @@ export default function AdminPage() {
   const [email, setEmail] = useState(activeOrg.email || "");
   const [watermark, setWatermark] = useState(activeOrg.defaultWatermark || "CONFIDENTIAL");
   const [newProductName, setNewProductName] = useState("");
+  const [isAddMemberOpen, setIsAddMemberOpen] = useState(false);
+  const [newMemberName, setNewMemberName] = useState("");
+  const [newMemberEmail, setNewMemberEmail] = useState("");
+  const [newMemberRole, setNewMemberRole] = useState<UserRole>("employee");
   const [isSaved, setIsSaved] = useState(false);
 
   if (currentRole === "employee") {
@@ -275,41 +285,171 @@ export default function AdminPage() {
         </CardContent>
       </Card>
 
-      {/* Team Member Roles */}
+      {/* Team Member Roles & Employee Management */}
       <Card className="border-border/80">
-        <CardHeader className="p-6 pb-4 border-b border-border/60">
-          <CardTitle className="text-base font-bold text-foreground flex items-center gap-2">
-            <Users className="h-5 w-5 text-indigo-600" />
-            <span>Team Members & Permission Roles</span>
-          </CardTitle>
-          <CardDescription className="text-xs">
-            Admin has full system control; Employee has access to clients, notes, and documents.
-          </CardDescription>
+        <CardHeader className="p-6 pb-4 border-b border-border/60 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div>
+            <CardTitle className="text-base font-bold text-foreground flex items-center gap-2">
+              <Users className="h-5 w-5 text-indigo-600" />
+              <span>Team Members & Permission Roles</span>
+            </CardTitle>
+            <CardDescription className="text-xs">
+              Admin has full system & financial control; Employee has access to clients, notes, and documents.
+            </CardDescription>
+          </div>
+
+          <Button
+            type="button"
+            variant="gradient"
+            size="sm"
+            onClick={() => setIsAddMemberOpen(!isAddMemberOpen)}
+            className="gap-1.5 shrink-0"
+          >
+            <UserPlus className="h-4 w-4" />
+            <span>{isAddMemberOpen ? "Close Form" : "+ Add Employee"}</span>
+          </Button>
         </CardHeader>
 
-        <CardContent className="p-6 space-y-3">
-          {teamMembers.map((member) => (
-            <div
-              key={member.uid}
-              className="flex items-center justify-between p-3.5 rounded-xl bg-muted/30 border border-border/60 text-xs"
+        <CardContent className="p-6 space-y-4">
+          {/* Add Employee Form (Collapsible) */}
+          {isAddMemberOpen && (
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (!newMemberName.trim() || !newMemberEmail.trim()) return;
+                addTeamMember({
+                  displayName: newMemberName.trim(),
+                  email: newMemberEmail.trim(),
+                  role: newMemberRole,
+                });
+                setNewMemberName("");
+                setNewMemberEmail("");
+                setNewMemberRole("employee");
+                setIsAddMemberOpen(false);
+              }}
+              className="p-4 rounded-xl bg-gradient-to-br from-indigo-500/10 via-card to-card border border-indigo-500/30 space-y-3 animate-in fade-in-50 duration-200"
             >
-              <div className="flex items-center gap-3">
-                <div className="h-9 w-9 rounded-full bg-gradient-to-tr from-indigo-500 to-purple-600 text-white font-bold flex items-center justify-center">
-                  {getInitials(member.displayName)}
-                </div>
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold uppercase tracking-wider text-foreground flex items-center gap-1.5">
+                  <UserPlus className="h-3.5 w-3.5 text-indigo-600" />
+                  <span>Add New Employee / Team Member</span>
+                </span>
+                <span className="text-[11px] text-muted-foreground">Immediate platform access</span>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
                 <div>
-                  <p className="font-semibold text-foreground">{member.displayName}</p>
-                  <p className="text-muted-foreground text-[11px]">{member.email}</p>
+                  <Label htmlFor="memberName" className="text-xs">Full Name *</Label>
+                  <Input
+                    id="memberName"
+                    value={newMemberName}
+                    onChange={(e) => setNewMemberName(e.target.value)}
+                    placeholder="e.g. Jason Miller"
+                    className="text-xs mt-1"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <Label htmlFor="memberEmail" className="text-xs">Email Address *</Label>
+                  <Input
+                    id="memberEmail"
+                    type="email"
+                    value={newMemberEmail}
+                    onChange={(e) => setNewMemberEmail(e.target.value)}
+                    placeholder="jason@staxify.com"
+                    className="text-xs mt-1"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <Label htmlFor="memberRole" className="text-xs">Permission Role</Label>
+                  <select
+                    id="memberRole"
+                    value={newMemberRole}
+                    onChange={(e) => setNewMemberRole(e.target.value as UserRole)}
+                    className="w-full h-9 px-3 mt-1 rounded-lg border border-input bg-background text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-primary font-medium"
+                  >
+                    <option value="employee">Employee (Restricted Financials)</option>
+                    <option value="admin">Admin (Full Access)</option>
+                  </select>
                 </div>
               </div>
 
-              <div className="flex items-center gap-2">
-                <span className="px-2.5 py-1 rounded-full bg-indigo-50 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300 font-bold uppercase text-[10px]">
-                  {member.role}
-                </span>
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-border/60">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setIsAddMemberOpen(false)}
+                  className="text-xs"
+                >
+                  Cancel
+                </Button>
+                <Button type="submit" variant="gradient" size="sm" className="gap-1.5 text-xs">
+                  <UserPlus className="h-3.5 w-3.5" />
+                  <span>Confirm & Add Member</span>
+                </Button>
               </div>
-            </div>
-          ))}
+            </form>
+          )}
+
+          {/* Member List */}
+          <div className="space-y-2.5">
+            {teamMembers.map((member) => (
+              <div
+                key={member.uid}
+                className="flex flex-col sm:flex-row sm:items-center justify-between p-3.5 rounded-xl bg-muted/30 border border-border/60 text-xs gap-3"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="h-9 w-9 rounded-full bg-gradient-to-tr from-indigo-500 to-purple-600 text-white font-bold flex items-center justify-center shrink-0">
+                    {getInitials(member.displayName)}
+                  </div>
+                  <div>
+                    <p className="font-semibold text-foreground">{member.displayName}</p>
+                    <p className="text-muted-foreground text-[11px]">{member.email}</p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-3 self-end sm:self-center">
+                  {/* Role Selector */}
+                  <select
+                    value={member.role}
+                    onChange={(e) =>
+                      updateTeamMember(member.uid, { role: e.target.value as UserRole })
+                    }
+                    className="text-xs h-8 px-2.5 rounded-lg border border-input bg-card text-foreground font-semibold uppercase tracking-wider focus:outline-none focus:ring-1 focus:ring-primary"
+                  >
+                    <option value="admin">ADMIN</option>
+                    <option value="employee">EMPLOYEE</option>
+                  </select>
+
+                  {/* Delete Button */}
+                  {teamMembers.length > 1 && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        if (
+                          confirm(
+                            `Are you sure you want to remove ${member.displayName} (${member.email}) from the team?`
+                          )
+                        ) {
+                          deleteTeamMember(member.uid);
+                        }
+                      }}
+                      className="h-8 w-8 p-0 text-muted-foreground/70 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/50"
+                      title="Remove team member"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
         </CardContent>
       </Card>
 

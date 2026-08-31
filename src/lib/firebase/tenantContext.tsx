@@ -39,6 +39,9 @@ interface TenantContextType {
   // Mutations
   addProduct: (name: string) => void;
   deleteProduct: (name: string) => void;
+  addTeamMember: (member: Omit<UserProfile, "uid" | "createdAt" | "orgId">) => UserProfile;
+  updateTeamMember: (uid: string, updates: Partial<UserProfile>) => void;
+  deleteTeamMember: (uid: string) => void;
   addCustomer: (customer: Omit<Customer, "id" | "orgId" | "createdAt" | "updatedAt">) => Customer;
   updateCustomer: (id: string, updates: Partial<Customer>) => void;
   deleteCustomer: (id: string) => void;
@@ -65,6 +68,7 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
   const [currentRole, setCurrentRole] = useState<UserRole>("admin");
   const [organizations, setOrganizations] = useState<Organization[]>(initialOrganizations);
   const [products, setProducts] = useState<string[]>(appConfig.defaultProducts);
+  const [teamMembers, setTeamMembers] = useState<UserProfile[]>(initialTeamMembers);
   
   // Scoped Store States
   const [primaryCustomers, setPrimaryCustomers] = useState<Customer[]>([]);
@@ -93,6 +97,13 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
         setProducts(JSON.parse(savedProducts));
       } else {
         setProducts(appConfig.defaultProducts);
+      }
+
+      const savedTeam = localStorage.getItem("staxhq_team_members");
+      if (savedTeam) {
+        setTeamMembers(JSON.parse(savedTeam));
+      } else {
+        setTeamMembers(initialTeamMembers);
       }
 
       const savedPrimaryCust = localStorage.getItem("staxhq_primary_customers");
@@ -343,6 +354,31 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
     localStorage.setItem("staxhq_products", JSON.stringify(next));
   };
 
+  const addTeamMember = (memberData: Omit<UserProfile, "uid" | "createdAt" | "orgId">) => {
+    const newMember: UserProfile = {
+      ...memberData,
+      uid: `usr-${Date.now()}`,
+      orgId: activeOrg.id,
+      createdAt: Date.now(),
+    };
+    const next = [...teamMembers, newMember];
+    setTeamMembers(next);
+    localStorage.setItem("staxhq_team_members", JSON.stringify(next));
+    return newMember;
+  };
+
+  const updateTeamMember = (uid: string, updates: Partial<UserProfile>) => {
+    const next = teamMembers.map((m) => (m.uid === uid ? { ...m, ...updates } : m));
+    setTeamMembers(next);
+    localStorage.setItem("staxhq_team_members", JSON.stringify(next));
+  };
+
+  const deleteTeamMember = (uid: string) => {
+    const next = teamMembers.filter((m) => m.uid !== uid);
+    setTeamMembers(next);
+    localStorage.setItem("staxhq_team_members", JSON.stringify(next));
+  };
+
   return (
     <TenantContext.Provider
       value={{
@@ -352,7 +388,10 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
         currentUser,
         currentRole,
         setCurrentRole: handleRoleChange,
-        teamMembers: initialTeamMembers,
+        teamMembers,
+        addTeamMember,
+        updateTeamMember,
+        deleteTeamMember,
         customers,
         contracts,
         notes,
