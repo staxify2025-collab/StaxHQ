@@ -35,9 +35,9 @@ export default function DocumentsPage() {
   const [isUploadOpen, setIsUploadOpen] = useState(false);
   const [signingDoc, setSigningDoc] = useState<ContractDocument | null>(null);
 
-  const filteredContracts = contracts.filter((doc) => {
+  const filteredContracts = (contracts || []).filter((doc) => {
     const matchesSearch =
-      doc.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      doc.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       doc.customerName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       doc.fileName?.toLowerCase().includes(searchQuery.toLowerCase());
 
@@ -47,9 +47,9 @@ export default function DocumentsPage() {
     return matchesSearch && matchesType && matchesStatus;
   });
 
-  const signedCount = contracts.filter((d) => d.status === "signed").length;
-  const pendingCount = contracts.filter((d) => d.status === "sent_for_signature").length;
-  const draftCount = contracts.filter((d) => d.status === "draft").length;
+  const signedCount = (contracts || []).filter((d) => d.status === "signed").length;
+  const pendingCount = (contracts || []).filter((d) => d.status === "sent_for_signature").length;
+  const draftCount = (contracts || []).filter((d) => d.status === "draft").length;
 
   const handleSignComplete = (
     docId: string,

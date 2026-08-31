@@ -26,13 +26,14 @@ export const appConfig: {
     "Custom Software Build",
   ],
   brand: {
-    name: "StaxHQ",
-    shortName: "Stax",
-    tagline: "Enterprise Client, Contract & Financial CRM",
+    name: "Staxify",
+    shortName: "Staxify",
+    tagline: "Layered Intelligence",
+    logoUrl: "/stax-logo.png",
     address: "100 Innovation Way, Suite 400, Birmingham, AL 35203",
     phone: "(205) 555-0199",
-    email: "operations@staxhq.com",
-    website: "https://staxhq.com",
+    email: "operations@staxify.com",
+    website: "https://staxify.com",
     primaryColor: "#4f46e5", // Indigo-600
     defaultWatermark: "CONFIDENTIAL",
     watermarkOptions: [

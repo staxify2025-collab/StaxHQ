@@ -145,13 +145,13 @@ export default function PublicSignPage() {
         {/* Security & Org Banner */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2.5">
-            <div className="h-9 w-9 rounded-xl bg-indigo-600 text-white flex items-center justify-center font-bold">
-              <Building2 className="h-5 w-5" />
+            <div className="h-10 w-10 rounded-xl bg-slate-900 border border-slate-800 p-1 flex items-center justify-center text-white font-bold overflow-hidden shadow-sm">
+              <img src="/stax-logo.png" alt="Staxify" className="h-full w-full object-contain" />
             </div>
             <div>
               <h2 className="font-bold text-sm text-foreground">{activeOrg.name}</h2>
-              <p className="text-[11px] text-muted-foreground">
-                Secure Document Signing Portal
+              <p className="text-[10px] text-indigo-600 dark:text-indigo-400 font-semibold uppercase tracking-wider">
+                Layered Intelligence • Secure Signing
               </p>
             </div>
           </div>

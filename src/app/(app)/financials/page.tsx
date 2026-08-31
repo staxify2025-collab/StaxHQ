@@ -45,7 +45,7 @@ export default function FinancialsPage() {
   const productOptions = Array.from(new Set(["all", ...products]));
 
   // Filter customers by product & payment status
-  const productFilteredCustomers = customers.filter((c) => {
+  const productFilteredCustomers = (customers || []).filter((c) => {
     if (selectedProduct === "all") return true;
     const prod = c.primaryProduct || "GovStax";
     return prod.toLowerCase() === selectedProduct.toLowerCase();
@@ -53,29 +53,29 @@ export default function FinancialsPage() {
 
   const tableFilteredCustomers = productFilteredCustomers.filter((c) => {
     if (filterStatus === "all") return true;
-    return c.financials.paymentStatus === filterStatus;
+    return c.financials?.paymentStatus === filterStatus;
   });
 
   // Calculate metrics for selected product
   const totalPortfolioValue = productFilteredCustomers.reduce(
-    (acc, c) => acc + (c.financials.totalContractValue || 0),
+    (acc, c) => acc + (c.financials?.totalContractValue || 0),
     0
   );
 
   const totalBuildFees = productFilteredCustomers.reduce(
-    (acc, c) => acc + (c.financials.setupFee || 0),
+    (acc, c) => acc + (c.financials?.setupFee || 0),
     0
   );
 
   const monthlyMRR = productFilteredCustomers.reduce(
     (acc, c) =>
       acc +
-      (c.financials.billingCycle === "monthly"
-        ? c.financials.recurringAmount
-        : c.financials.billingCycle === "quarterly"
-        ? c.financials.recurringAmount / 3
-        : c.financials.billingCycle === "annually"
-        ? c.financials.recurringAmount / 12
+      (c.financials?.billingCycle === "monthly"
+        ? (c.financials?.recurringAmount || 0)
+        : c.financials?.billingCycle === "quarterly"
+        ? (c.financials?.recurringAmount || 0) / 3
+        : c.financials?.billingCycle === "annually"
+        ? (c.financials?.recurringAmount || 0) / 12
         : 0),
     0
   );
@@ -83,12 +83,12 @@ export default function FinancialsPage() {
   const annualARR = productFilteredCustomers.reduce(
     (acc, c) =>
       acc +
-      (c.financials.billingCycle === "monthly"
-        ? c.financials.recurringAmount * 12
-        : c.financials.billingCycle === "quarterly"
-        ? c.financials.recurringAmount * 4
-        : c.financials.billingCycle === "annually"
-        ? c.financials.recurringAmount
+      (c.financials?.billingCycle === "monthly"
+        ? (c.financials?.recurringAmount || 0) * 12
+        : c.financials?.billingCycle === "quarterly"
+        ? (c.financials?.recurringAmount || 0) * 4
+        : c.financials?.billingCycle === "annually"
+        ? (c.financials?.recurringAmount || 0)
         : 0),
     0
   );
@@ -302,9 +302,9 @@ export default function FinancialsPage() {
                   </tr>
                 ) : (
                   tableFilteredCustomers.map((cust) => {
-                    const setup = cust.financials.setupFee || 0;
-                    const recurring = cust.financials.recurringAmount || 0;
-                    const cycle = cust.financials.billingCycle;
+                    const setup = cust.financials?.setupFee || 0;
+                    const recurring = cust.financials?.recurringAmount || 0;
+                    const cycle = cust.financials?.billingCycle || "annually";
                     const firstYrRecurring =
                       cycle === "monthly"
                         ? recurring * 12
@@ -338,25 +338,25 @@ export default function FinancialsPage() {
                           {formatCurrency(recurring)} / {cycle === "annually" ? "yr" : cycle === "monthly" ? "mo" : cycle === "quarterly" ? "qtr" : "one-time"}
                         </td>
                         <td className="p-4 font-bold text-foreground">
-                          {formatCurrency(firstYrTotal || cust.financials.totalContractValue)}
+                          {formatCurrency(firstYrTotal || cust.financials?.totalContractValue || 0)}
                         </td>
                         <td className="p-4">
                           <Badge
                             variant={
-                              cust.financials.paymentStatus === "current" ||
-                              cust.financials.paymentStatus === "paid"
+                              cust.financials?.paymentStatus === "current" ||
+                              cust.financials?.paymentStatus === "paid"
                                 ? "success"
-                                : cust.financials.paymentStatus === "pending"
+                                : cust.financials?.paymentStatus === "pending"
                                 ? "warning"
                                 : "destructive"
                             }
                             className="text-[10px] uppercase font-bold"
                           >
-                            {cust.financials.paymentStatus}
+                            {cust.financials?.paymentStatus || "current"}
                           </Badge>
                         </td>
                         <td className="p-4 text-muted-foreground">
-                          {formatDate(cust.financials.nextRenewalDate)}
+                          {formatDate(cust.financials?.nextRenewalDate)}
                         </td>
                         <td className="p-4 pr-6 text-right">
                           <Link

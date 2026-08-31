@@ -64,17 +64,21 @@ export function AppSidebar() {
       {/* Brand Header */}
       <div className="p-5 border-b border-border/60 flex items-center justify-between">
         <Link href="/dashboard" className="flex items-center gap-3 group">
-          <div className="h-10 w-10 rounded-xl bg-gradient-to-tr from-indigo-600 to-violet-600 flex items-center justify-center text-white shadow-md shadow-indigo-500/20 group-hover:scale-105 transition-transform duration-200">
-            <Layers className="h-5 w-5" />
+          <div className="h-10 w-10 rounded-xl bg-slate-900 border border-slate-800 p-1 flex items-center justify-center text-white shadow-md shadow-indigo-500/20 group-hover:scale-105 transition-transform duration-200 overflow-hidden shrink-0">
+            <img
+              src="/stax-logo.png"
+              alt="Staxify"
+              className="h-full w-full object-contain"
+            />
           </div>
           <div>
             <div className="flex items-center gap-1.5">
-              <span className="font-bold text-lg tracking-tight text-foreground">
-                {activeOrg.shortName || "StaxHQ"}
+              <span className="font-extrabold text-lg tracking-tight text-foreground">
+                {activeOrg.shortName || "Staxify"}
               </span>
             </div>
-            <p className="text-xs text-muted-foreground font-medium truncate max-w-[120px]">
-              {activeOrg.name}
+            <p className="text-[10px] text-muted-foreground font-semibold tracking-wider uppercase">
+              Layered Intelligence
             </p>
           </div>
         </Link>

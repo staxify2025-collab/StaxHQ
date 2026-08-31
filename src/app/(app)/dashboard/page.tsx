@@ -46,21 +46,21 @@ export default function DashboardPage() {
   const [isEventModalOpen, setIsEventModalOpen] = useState(false);
 
   // Financial calculations
-  const totalValue = customers.reduce(
-    (acc, c) => acc + (c.financials.totalContractValue || 0),
+  const totalValue = (customers || []).reduce(
+    (acc, c) => acc + (c.financials?.totalContractValue || 0),
     0
   );
-  const activeMRR = customers.reduce(
+  const activeMRR = (customers || []).reduce(
     (acc, c) =>
       acc +
-      (c.financials.billingCycle === "monthly"
-        ? c.financials.recurringAmount
-        : c.financials.recurringAmount / 12),
+      (c.financials?.billingCycle === "monthly"
+        ? (c.financials?.recurringAmount || 0)
+        : (c.financials?.recurringAmount || 0) / 12),
     0
   );
 
-  const activeCount = customers.filter((c) => c.status === "active").length;
-  const signedContracts = contracts.filter((d) => d.status === "signed");
+  const activeCount = (customers || []).filter((c) => c.status === "active").length;
+  const signedContracts = (contracts || []).filter((d) => d.status === "signed");
 
   return (
     <div className="space-y-8">

@@ -53,8 +53,8 @@ export default function CustomerDetailPage() {
     activeOrg 
   } = useTenant();
 
-  const customer = customers.find((c) => c.id === customerId);
-  const customerContracts = contracts.filter((d) => d.customerId === customerId);
+  const customer = (customers || []).find((c) => c.id === customerId);
+  const customerContracts = (contracts || []).filter((d) => d.customerId === customerId);
 
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
@@ -76,10 +76,10 @@ export default function CustomerDetailPage() {
     );
   }
 
-  const primaryContact = customer.contacts.find((c) => c.isPrimary) || customer.contacts[0];
-  const setup = customer.financials.setupFee || 0;
-  const recurring = customer.financials.recurringAmount || 0;
-  const cycle = customer.financials.billingCycle;
+  const primaryContact = customer.contacts?.find((c) => c.isPrimary) || customer.contacts?.[0];
+  const setup = customer.financials?.setupFee || 0;
+  const recurring = customer.financials?.recurringAmount || 0;
+  const cycle = customer.financials?.billingCycle || "annually";
 
   const handleSignComplete = (
     docId: string,
@@ -204,7 +204,7 @@ export default function CustomerDetailPage() {
             Year 1 Total Investment
           </span>
           <span className="text-xl font-bold text-foreground mt-1 block">
-            {formatCurrency(customer.financials.totalContractValue)}
+            {formatCurrency(customer.financials?.totalContractValue || 0)}
           </span>
           <span className="text-[11px] text-emerald-600 dark:text-emerald-400 font-medium mt-0.5 block">
             Build Fee + First Year
@@ -246,7 +246,7 @@ export default function CustomerDetailPage() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="p-5 space-y-4">
-                {customer.contacts.map((contact) => (
+                {(customer.contacts || []).map((contact) => (
                   <div
                     key={contact.id}
                     className="p-3 rounded-xl bg-muted/40 border border-border/60 space-y-2"
@@ -552,13 +552,13 @@ export default function CustomerDetailPage() {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {customer.projects.length === 0 ? (
+            {!(customer.projects?.length) ? (
               <div className="col-span-full p-12 text-center border border-dashed border-border rounded-2xl bg-card">
                 <Layers className="h-10 w-10 text-muted-foreground/40 mx-auto mb-2" />
                 <p className="text-sm font-semibold text-foreground">No active software deployments</p>
               </div>
             ) : (
-              customer.projects.map((proj) => (
+              (customer.projects || []).map((proj) => (
                 <Card key={proj.id} className="border-border/80">
                   <CardHeader className="p-5 pb-3">
                     <div className="flex items-start justify-between">

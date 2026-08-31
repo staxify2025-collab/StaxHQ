@@ -50,21 +50,26 @@ export function generateContractPdf({
     doc.restoreGraphicsState();
   }
 
-  // 2. Company Header
+  // 2. Company Official Letterhead Header
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(18);
+  doc.setFontSize(20);
   doc.setTextColor(30, 41, 59); // Slate-800
-  doc.text(activeOrg.name.toUpperCase(), 20, 22);
+  doc.text("STAXIFY", 20, 20);
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(7.5);
+  doc.setTextColor(99, 102, 241); // Indigo-500
+  doc.text("L A Y E R E D   I N T E L L I G E N C E", 20, 25);
 
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(9);
+  doc.setFontSize(8.5);
   doc.setTextColor(100, 116, 139); // Slate-500
-  doc.text(activeOrg.address || "", 20, 28);
-  doc.text(`Phone: ${activeOrg.phone || ""}  |  Email: ${activeOrg.email || ""}`, 20, 33);
+  doc.text(activeOrg.address || "100 Innovation Way, Suite 400, Birmingham, AL 35203", 20, 30);
+  doc.text(`Phone: ${activeOrg.phone || "(205) 555-0199"}  |  Email: ${activeOrg.email || "operations@staxify.com"}  |  Web: staxify.com`, 20, 34);
 
   // Header Divider Rule
-  doc.setDrawColor(203, 213, 225); // Slate-300
-  doc.setLineWidth(0.5);
+  doc.setDrawColor(99, 102, 241); // Indigo
+  doc.setLineWidth(0.8);
   doc.line(20, 38, pageWidth - 20, 38);
 
   // 3. Document Title & Metadata

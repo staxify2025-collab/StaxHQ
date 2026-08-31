@@ -3,12 +3,13 @@ import { Customer, ContractDocument, ActivityNote, CalendarEvent, UserProfile, O
 export const initialOrganizations: Organization[] = [
   {
     id: "stax",
-    name: "StaxHQ",
-    shortName: "Stax",
+    name: "Staxify",
+    shortName: "Staxify",
+    logoUrl: "/stax-logo.png",
     address: "100 Innovation Way, Suite 400, Birmingham, AL 35203",
     phone: "(205) 555-0199",
-    email: "operations@staxhq.com",
-    website: "https://staxhq.com",
+    email: "operations@staxify.com",
+    website: "https://staxify.com",
     taxId: "XX-XXXXXXX",
     defaultWatermark: "CONFIDENTIAL",
     isDemo: false,

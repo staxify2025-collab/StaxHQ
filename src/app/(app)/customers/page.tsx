@@ -36,19 +36,23 @@ export default function CustomersPage() {
   const [selectedProduct, setSelectedProduct] = useState<string>("all");
   const [isModalOpen, setIsModalOpen] = useState(false);
 
-  const productOptions = Array.from(new Set(["all", ...products]));
+  const productList = products || appConfig.defaultProducts || [];
+  const productOptions = Array.from(new Set(["all", ...productList]));
 
-  const filteredCustomers = customers.filter((c) => {
-    const matchesSearch =
-      c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      c.primaryProduct?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      c.industry?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      c.contacts.some(
+  const filteredCustomers = (customers || []).filter((c) => {
+    const nameMatch = c.name?.toLowerCase().includes(searchQuery.toLowerCase()) ?? false;
+    const prodMatch = c.primaryProduct?.toLowerCase().includes(searchQuery.toLowerCase()) ?? false;
+    const indMatch = c.industry?.toLowerCase().includes(searchQuery.toLowerCase()) ?? false;
+    const contactMatch =
+      c.contacts?.some(
         (ct) =>
-          ct.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          ct.email.toLowerCase().includes(searchQuery.toLowerCase())
-      ) ||
-      c.tags.some((t) => t.toLowerCase().includes(searchQuery.toLowerCase()));
+          (ct.name?.toLowerCase().includes(searchQuery.toLowerCase()) ?? false) ||
+          (ct.email?.toLowerCase().includes(searchQuery.toLowerCase()) ?? false)
+      ) ?? false;
+    const tagMatch =
+      c.tags?.some((t) => t.toLowerCase().includes(searchQuery.toLowerCase())) ?? false;
+
+    const matchesSearch = nameMatch || prodMatch || indMatch || contactMatch || tagMatch;
 
     const matchesProduct =
       selectedProduct === "all"
@@ -63,20 +67,20 @@ export default function CustomersPage() {
     return matchesSearch && matchesProduct;
   });
 
-  const totalPortfolioValue = customers.reduce(
-    (acc, c) => acc + (c.financials.totalContractValue || 0),
+  const totalPortfolioValue = (customers || []).reduce(
+    (acc, c) => acc + (c.financials?.totalContractValue || 0),
     0
   );
-  const activeMRR = customers.reduce(
+  const activeMRR = (customers || []).reduce(
     (acc, c) =>
       acc +
-      (c.financials.billingCycle === "monthly"
-        ? c.financials.recurringAmount
-        : c.financials.recurringAmount / 12),
+      (c.financials?.billingCycle === "monthly"
+        ? (c.financials?.recurringAmount || 0)
+        : (c.financials?.recurringAmount || 0) / 12),
     0
   );
-  const activeCount = customers.filter((c) => c.status === "active").length;
-  const prospectCount = customers.filter((c) => c.status !== "active").length;
+  const activeCount = (customers || []).filter((c) => c.status === "active").length;
+  const prospectCount = (customers || []).filter((c) => c.status !== "active").length;
 
   return (
     <div className="space-y-6">
@@ -265,10 +269,11 @@ export default function CustomersPage() {
         ) : (
           filteredCustomers.map((customer) => {
             const primaryContact =
-              customer.contacts.find((c) => c.isPrimary) || customer.contacts[0];
-            const setup = customer.financials.setupFee || 0;
-            const recurring = customer.financials.recurringAmount || 0;
-            const cycle = customer.financials.billingCycle;
+              customer.contacts?.find((c) => c.isPrimary) || customer.contacts?.[0];
+            const setup = customer.financials?.setupFee || 0;
+            const recurring = customer.financials?.recurringAmount || 0;
+            const cycle = customer.financials?.billingCycle || "annually";
+            const totalVal = customer.financials?.totalContractValue || 0;
 
             return (
               <Link
@@ -335,7 +340,7 @@ export default function CustomersPage() {
                           Year 1 Total
                         </span>
                         <span className="font-bold text-foreground">
-                          {formatCurrency(customer.financials.totalContractValue)}
+                          {formatCurrency(totalVal)}
                         </span>
                       </div>
                       <div className="text-right">
