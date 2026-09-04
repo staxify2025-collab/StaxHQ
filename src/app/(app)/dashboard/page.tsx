@@ -18,7 +18,9 @@ import {
   Printer, 
   Sparkles,
   MessageSquare,
-  ShieldCheck
+  ShieldCheck,
+  Wallet,
+  Receipt
 } from "lucide-react";
 import { useTenant } from "@/lib/firebase/tenantContext";
 import { Button } from "@/components/ui/button";
@@ -29,6 +31,13 @@ import { DocumentUploaderModal } from "@/components/documents/DocumentUploaderMo
 import { EventModal } from "@/components/calendar/EventModal";
 import { downloadContractPdf, printContractPdf } from "@/lib/pdf/pdfGenerator";
 import { formatCurrency, formatDate, formatTimeAgo, getInitials } from "@/lib/utils";
+import {
+  calculatePaidCashToDate,
+  calculateAnnualARR,
+  calculateMonthlyMRR,
+  calculatePendingReceivables,
+  calculateCustomerPaidTotal
+} from "@/lib/financials/financialCalculations";
 
 export default function DashboardPage() {
   const { 
@@ -36,6 +45,7 @@ export default function DashboardPage() {
     isDemoMode, 
     customers, 
     contracts, 
+    invoices,
     notes, 
     events,
     currentRole 
@@ -45,21 +55,16 @@ export default function DashboardPage() {
   const [isDocModalOpen, setIsDocModalOpen] = useState(false);
   const [isEventModalOpen, setIsEventModalOpen] = useState(false);
 
-  // Financial calculations
-  const totalValue = (customers || []).reduce(
-    (acc, c) => acc + (c.financials?.totalContractValue || 0),
-    0
-  );
-  const activeMRR = (customers || []).reduce(
-    (acc, c) =>
-      acc +
-      (c.financials?.billingCycle === "monthly"
-        ? (c.financials?.recurringAmount || 0)
-        : (c.financials?.recurringAmount || 0) / 12),
-    0
-  );
+  // Financial calculations from strict ledger
+  const totalPaidCash = calculatePaidCashToDate(invoices);
+  const annualARR = calculateAnnualARR(customers);
+  const monthlyMRR = calculateMonthlyMRR(customers);
+  const pendingReceivables = calculatePendingReceivables(invoices);
 
   const activeCount = (customers || []).filter((c) => c.status === "active").length;
+  const betaCount = (customers || []).filter(
+    (c) => (c.financials?.recurringAmount || 0) === 0 && (c.financials?.setupFee || 0) === 0
+  ).length;
   const signedContracts = (contracts || []).filter((d) => d.status === "signed");
 
   return (
@@ -79,7 +84,7 @@ export default function DashboardPage() {
             )}
           </div>
           <p className="text-sm text-muted-foreground mt-1">
-            Enterprise Client Operations, Legal Contracts, and Financial Performance Hub.
+            Enterprise Client Operations, Legal Contracts, and Realized Financial Hub.
           </p>
         </div>
 
@@ -117,9 +122,9 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* KPI Cards */}
+      {/* KPI Cards: Active Accounts, Total Collected to Date, ARR, MRR */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card className="border-border/80 bg-gradient-to-br from-card to-indigo-500/5">
+        <Card className="border-border/80 bg-gradient-to-br from-card to-indigo-500/5 shadow-sm">
           <CardContent className="p-5 flex items-center justify-between">
             <div>
               <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
@@ -127,7 +132,7 @@ export default function DashboardPage() {
               </p>
               <h3 className="text-2xl font-bold text-foreground mt-1">{activeCount}</h3>
               <p className="text-xs text-indigo-600 dark:text-indigo-400 font-medium mt-1">
-                {customers.length} total in pipeline
+                {customers.length} total {betaCount > 0 ? `(${betaCount} beta/free)` : "in pipeline"}
               </p>
             </div>
             <div className="h-12 w-12 rounded-xl bg-indigo-500/10 text-indigo-600 flex items-center justify-center">
@@ -136,55 +141,64 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
 
-        <Card className="border-border/80 bg-gradient-to-br from-card to-emerald-500/5">
+        {/* Total Collected to Date (Realized Cash strictly from Paid Invoices) */}
+        <Card className="border-border/80 bg-gradient-to-br from-card to-emerald-500/5 shadow-sm">
+          <CardContent className="p-5 flex items-center justify-between">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                Total Collected to Date
+              </p>
+              <h3 className="text-2xl font-bold text-emerald-600 dark:text-emerald-400 mt-1">
+                {currentRole === "admin" ? formatCurrency(totalPaidCash) : "Restricted"}
+              </h3>
+              <p className="text-xs text-muted-foreground font-medium mt-1">
+                {pendingReceivables > 0
+                  ? `+ ${formatCurrency(pendingReceivables)} pending`
+                  : "Realized cash from paid invoices"}
+              </p>
+            </div>
+            <div className="h-12 w-12 rounded-xl bg-emerald-500/10 text-emerald-600 flex items-center justify-center">
+              <Wallet className="h-6 w-6" />
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Annual Recurring (ARR) */}
+        <Card className="border-border/80 bg-gradient-to-br from-card to-purple-500/5 shadow-sm">
+          <CardContent className="p-5 flex items-center justify-between">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                Annual Recurring (ARR)
+              </p>
+              <h3 className="text-2xl font-bold text-foreground mt-1">
+                {currentRole === "admin" ? formatCurrency(annualARR) : "Restricted"}
+              </h3>
+              <p className="text-xs text-purple-600 dark:text-purple-400 font-medium mt-1">
+                Active Annual Retainers
+              </p>
+            </div>
+            <div className="h-12 w-12 rounded-xl bg-purple-500/10 text-purple-600 flex items-center justify-center">
+              <DollarSign className="h-6 w-6" />
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Monthly Recurring (MRR) strictly for monthly clients */}
+        <Card className="border-border/80 bg-gradient-to-br from-card to-sky-500/5 shadow-sm">
           <CardContent className="p-5 flex items-center justify-between">
             <div>
               <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                 Monthly Recurring (MRR)
               </p>
               <h3 className="text-2xl font-bold text-foreground mt-1">
-                {currentRole === "admin" ? formatCurrency(activeMRR) : "Restricted"}
+                {currentRole === "admin" ? formatCurrency(monthlyMRR) : "Restricted"}
               </h3>
-              <p className="text-xs text-emerald-600 dark:text-emerald-400 font-medium mt-1">
-                Contract Retainers
+              <p className="text-xs text-sky-600 dark:text-sky-400 font-medium mt-1">
+                {monthlyMRR > 0 ? "Active Monthly Retainers" : "$0.00/mo active"}
               </p>
             </div>
-            <div className="h-12 w-12 rounded-xl bg-emerald-500/10 text-emerald-600 flex items-center justify-center">
-              <DollarSign className="h-6 w-6" />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="border-border/80 bg-gradient-to-br from-card to-violet-500/5">
-          <CardContent className="p-5 flex items-center justify-between">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                Signed Contracts
-              </p>
-              <h3 className="text-2xl font-bold text-foreground mt-1">{signedContracts.length}</h3>
-              <p className="text-xs text-emerald-600 dark:text-emerald-400 font-medium mt-1">
-                {contracts.length} documents on file
-              </p>
-            </div>
-            <div className="h-12 w-12 rounded-xl bg-violet-500/10 text-violet-600 flex items-center justify-center">
-              <CheckCircle2 className="h-6 w-6" />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="border-border/80 bg-gradient-to-br from-card to-muted/20">
-          <CardContent className="p-5 flex items-center justify-between">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                Upcoming Meetings
-              </p>
-              <h3 className="text-2xl font-bold text-foreground mt-1">{events.length}</h3>
-              <p className="text-xs text-muted-foreground font-medium mt-1">
-                Scheduled on board
-              </p>
-            </div>
-            <div className="h-12 w-12 rounded-xl bg-slate-500/10 text-slate-600 flex items-center justify-center">
-              <CalendarIcon className="h-6 w-6" />
+            <div className="h-12 w-12 rounded-xl bg-sky-500/10 text-sky-600 flex items-center justify-center">
+              <Clock className="h-6 w-6" />
             </div>
           </CardContent>
         </Card>
@@ -221,42 +235,52 @@ export default function DashboardPage() {
                     No customers added yet.
                   </p>
                 ) : (
-                  customers.slice(0, 4).map((c) => (
-                    <Link
-                      key={c.id}
-                      href={`/customers/${c.id}`}
-                      className="p-4 flex items-center justify-between hover:bg-muted/20 transition-colors block"
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className="h-9 w-9 rounded-xl bg-indigo-500/10 text-indigo-600 font-bold text-xs flex items-center justify-center">
-                          <Building2 className="h-4 w-4" />
-                        </div>
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <h4 className="text-xs font-bold text-foreground">{c.name}</h4>
-                            <Badge
-                              variant={c.status === "active" ? "success" : "secondary"}
-                              className="text-[10px] uppercase font-bold"
-                            >
-                              {c.status.replace("_", " ")}
-                            </Badge>
-                          </div>
-                          <p className="text-[11px] text-muted-foreground">
-                            {c.contacts[0]?.name || "Executive Lead"} • {c.industry || "General"}
-                          </p>
-                        </div>
-                      </div>
+                  customers.slice(0, 4).map((c) => {
+                    const customerPaid = calculateCustomerPaidTotal(c.id, invoices);
+                    const isBeta = (c.financials?.recurringAmount || 0) === 0 && (c.financials?.setupFee || 0) === 0;
 
-                      <div className="text-right text-xs">
-                        <span className="font-bold text-foreground block">
-                          {formatCurrency(c.financials.totalContractValue)}
-                        </span>
-                        <span className="text-[11px] text-indigo-600 dark:text-indigo-400 font-medium">
-                          {formatCurrency(c.financials.recurringAmount)}/{c.financials.billingCycle === "monthly" ? "mo" : "yr"}
-                        </span>
-                      </div>
-                    </Link>
-                  ))
+                    return (
+                      <Link
+                        key={c.id}
+                        href={`/customers/${c.id}`}
+                        className="p-4 flex items-center justify-between hover:bg-muted/20 transition-colors block"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="h-9 w-9 rounded-xl bg-indigo-500/10 text-indigo-600 font-bold text-xs flex items-center justify-center">
+                            <Building2 className="h-4 w-4" />
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <h4 className="text-xs font-bold text-foreground">{c.name}</h4>
+                              <Badge
+                                variant={c.status === "active" ? "success" : "secondary"}
+                                className="text-[10px] uppercase font-bold"
+                              >
+                                {c.status.replace("_", " ")}
+                              </Badge>
+                              {isBeta && (
+                                <Badge variant="outline" className="text-[10px] font-semibold border-indigo-500/30 text-indigo-600">
+                                  Beta / $0
+                                </Badge>
+                              )}
+                            </div>
+                            <p className="text-[11px] text-muted-foreground">
+                              {c.contacts[0]?.name || "Executive Lead"} • {c.industry || "General"}
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="text-right text-xs">
+                          <span className="font-bold text-foreground block">
+                            {isBeta ? "Free Tier" : formatCurrency(c.financials?.totalContractValue || 0)}
+                          </span>
+                          <span className="text-[11px] text-emerald-600 dark:text-emerald-400 font-medium block">
+                            {customerPaid > 0 ? `Paid: ${formatCurrency(customerPaid)}` : "No payments yet"}
+                          </span>
+                        </div>
+                      </Link>
+                    );
+                  })
                 )}
               </div>
             </CardContent>

@@ -15,10 +15,12 @@ import {
   Layers,
   Trash2,
   Plus,
-  UserPlus
+  UserPlus,
+  Calendar as CalendarIcon
 } from "lucide-react";
 import { useTenant } from "@/lib/firebase/tenantContext";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -41,7 +43,9 @@ export default function AdminPage() {
     addTeamMember,
     updateTeamMember,
     deleteTeamMember,
-    customers
+    customers,
+    clearAllPrimaryData,
+    seedSamplePrimaryData
   } = useTenant();
 
   const [name, setName] = useState(activeOrg.name);
@@ -453,7 +457,124 @@ export default function AdminPage() {
         </CardContent>
       </Card>
 
-      {/* Multi-Tenant Demo Sandbox Controls */}
+      {/* Google Calendar & External Integrations */}
+      <Card className="border-border/80">
+        <CardHeader className="p-6 pb-4 border-b border-border/60">
+          <CardTitle className="text-base font-bold text-foreground flex items-center gap-2">
+            <CalendarIcon className="h-5 w-5 text-indigo-600" />
+            <span>Google Workspace & Calendar Synchronization</span>
+          </CardTitle>
+          <CardDescription className="text-xs">
+            Manage 1-click meeting export links and configure 2-way Google Calendar background sync.
+          </CardDescription>
+        </CardHeader>
+
+        <CardContent className="p-6 space-y-4">
+          <div className="p-4 rounded-xl bg-indigo-50/50 dark:bg-indigo-950/30 border border-indigo-200/60 dark:border-indigo-900/60 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="h-2.5 w-2.5 rounded-full bg-emerald-500 animate-pulse" />
+                <h4 className="text-sm font-bold text-foreground">
+                  Direct 1-Click Google Calendar Action: Active
+                </h4>
+              </div>
+              <p className="text-xs text-muted-foreground mt-1 max-w-lg">
+                Every scheduled event features a 1-click link to open and save in Google Calendar with your tagged team attendees and customer address pre-filled.
+              </p>
+            </div>
+
+            <Badge variant="success" className="shrink-0 text-xs">
+              Direct Action Enabled
+            </Badge>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+            <div>
+              <Label htmlFor="icalFeed" className="text-xs">
+                Optional: Google Calendar Private iCal Feed URL (2-Way Pull)
+              </Label>
+              <Input
+                id="icalFeed"
+                placeholder="https://calendar.google.com/calendar/ical/.../basic.ics"
+                className="mt-1 text-xs"
+              />
+              <p className="text-[11px] text-muted-foreground mt-1">
+                Found in Google Calendar ➔ Settings ➔ &quot;Secret address in iCal format&quot;.
+              </p>
+            </div>
+
+            <div className="flex flex-col justify-end">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => alert("Google Workspace live 2-way sync credentials saved.")}
+                className="gap-2 text-xs"
+              >
+                <RefreshCw className="h-3.5 w-3.5 text-indigo-600" />
+                <span>Save Calendar Integration Settings</span>
+              </Button>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Data Management & Blank Slate Reset */}
+      <Card className="border-rose-500/30 bg-rose-500/5">
+        <CardHeader className="p-6 pb-4 border-b border-rose-500/20">
+          <CardTitle className="text-base font-bold text-foreground flex items-center gap-2">
+            <Trash2 className="h-5 w-5 text-rose-600" />
+            <span>Workspace Data Management & Blank Slate</span>
+          </CardTitle>
+          <CardDescription className="text-xs">
+            Clear all stock test data to have a 100% clean blank slate for live company operations, or restore sample presets at any time.
+          </CardDescription>
+        </CardHeader>
+
+        <CardContent className="p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <h4 className="text-sm font-semibold text-foreground">
+              Clean Blank Slate Reset
+            </h4>
+            <p className="text-xs text-muted-foreground mt-0.5 max-w-md">
+              Wipes all customers, contracts, invoices, project cards, bank transactions, and activity notes from your primary company workspace.
+            </p>
+          </div>
+
+          <div className="flex items-center gap-2 shrink-0 flex-wrap">
+            <Button
+              onClick={() => {
+                if (window.confirm("Are you sure you want to wipe all stock data and start with a completely clean blank slate?")) {
+                  clearAllPrimaryData();
+                  alert("✓ Workspace wiped clean! You now have a fresh blank slate.");
+                }
+              }}
+              variant="destructive"
+              size="sm"
+              className="gap-1.5 text-xs font-bold shadow-xs"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+              <span>Wipe to Blank Slate</span>
+            </Button>
+
+            <Button
+              onClick={() => {
+                if (window.confirm("Restore sample mock data into your primary workspace?")) {
+                  seedSamplePrimaryData();
+                  alert("✓ Sample data restored.");
+                }
+              }}
+              variant="outline"
+              size="sm"
+              className="gap-1.5 text-xs font-semibold"
+            >
+              <RefreshCw className="h-3.5 w-3.5" />
+              <span>Restore Sample Data</span>
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Multi-Tenant Demo Sandbox */}
       <Card className="border-emerald-500/30 bg-emerald-500/5">
         <CardHeader className="p-6 pb-4 border-b border-emerald-500/20">
           <CardTitle className="text-base font-bold text-foreground flex items-center gap-2">

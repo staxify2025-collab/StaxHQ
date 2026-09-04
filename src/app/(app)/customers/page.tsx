@@ -28,9 +28,17 @@ import { CustomerModal } from "@/components/customers/CustomerModal";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { CustomerType } from "@/types/crm";
 import { appConfig } from "@/config/appConfig";
+import {
+  calculatePaidCashToDate,
+  calculateAnnualARR,
+  calculateMonthlyMRR,
+  calculateCustomerPaidTotal,
+  calculateTotalPortfolioValue
+} from "@/lib/financials/financialCalculations";
+import { Wallet } from "lucide-react";
 
 export default function CustomersPage() {
-  const { customers, isDemoMode, products } = useTenant();
+  const { customers, invoices, isDemoMode, products } = useTenant();
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedTab, setSelectedTab] = useState<string>("all");
   const [selectedProduct, setSelectedProduct] = useState<string>("all");
@@ -67,19 +75,13 @@ export default function CustomersPage() {
     return matchesSearch && matchesProduct;
   });
 
-  const totalPortfolioValue = (customers || []).reduce(
-    (acc, c) => acc + (c.financials?.totalContractValue || 0),
-    0
-  );
-  const activeMRR = (customers || []).reduce(
-    (acc, c) =>
-      acc +
-      (c.financials?.billingCycle === "monthly"
-        ? (c.financials?.recurringAmount || 0)
-        : (c.financials?.recurringAmount || 0) / 12),
-    0
-  );
+  const totalPaidCash = calculatePaidCashToDate(invoices);
+  const annualARR = calculateAnnualARR(customers);
+  const monthlyMRR = calculateMonthlyMRR(customers);
   const activeCount = (customers || []).filter((c) => c.status === "active").length;
+  const betaCount = (customers || []).filter(
+    (c) => (c.financials?.recurringAmount || 0) === 0 && (c.financials?.setupFee || 0) === 0
+  ).length;
   const prospectCount = (customers || []).filter((c) => c.status !== "active").length;
 
   return (
@@ -106,75 +108,80 @@ export default function CustomersPage() {
         </Button>
       </div>
 
-      {/* KPI Cards */}
+      {/* KPI Cards: Active Accounts, Total Collected, ARR, MRR */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card className="bg-gradient-to-br from-card to-muted/20 border-border/70">
+        <Card className="bg-gradient-to-br from-card to-indigo-500/5 border-border/70 shadow-sm">
           <CardContent className="p-5 flex items-center justify-between">
             <div>
               <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                 Active Clients
               </p>
               <h3 className="text-2xl font-bold text-foreground mt-1">{activeCount}</h3>
-              <p className="text-xs text-emerald-600 dark:text-emerald-400 font-medium mt-1">
-                Contracted Accounts
+              <p className="text-xs text-indigo-600 dark:text-indigo-400 font-medium mt-1">
+                {betaCount > 0 ? `${betaCount} beta/free accounts` : "Contracted Accounts"}
               </p>
             </div>
-            <div className="h-12 w-12 rounded-xl bg-emerald-500/10 text-emerald-600 flex items-center justify-center">
+            <div className="h-12 w-12 rounded-xl bg-indigo-500/10 text-indigo-600 flex items-center justify-center">
               <CheckCircle2 className="h-6 w-6" />
             </div>
           </CardContent>
         </Card>
 
-        <Card className="bg-gradient-to-br from-card to-muted/20 border-border/70">
+        {/* Total Collected to Date */}
+        <Card className="bg-gradient-to-br from-card to-emerald-500/5 border-border/70 shadow-sm">
           <CardContent className="p-5 flex items-center justify-between">
             <div>
               <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                Pipeline Prospects
+                Total Paid to Date
               </p>
-              <h3 className="text-2xl font-bold text-foreground mt-1">{prospectCount}</h3>
-              <p className="text-xs text-indigo-600 dark:text-indigo-400 font-medium mt-1">
-                Proposals & Leads
+              <h3 className="text-2xl font-bold text-emerald-600 dark:text-emerald-400 mt-1">
+                {formatCurrency(totalPaidCash)}
+              </h3>
+              <p className="text-xs text-muted-foreground font-medium mt-1">
+                Realized Cash from Invoices
               </p>
             </div>
-            <div className="h-12 w-12 rounded-xl bg-indigo-500/10 text-indigo-600 flex items-center justify-center">
-              <TrendingUp className="h-6 w-6" />
+            <div className="h-12 w-12 rounded-xl bg-emerald-500/10 text-emerald-600 flex items-center justify-center">
+              <Wallet className="h-6 w-6" />
             </div>
           </CardContent>
         </Card>
 
-        <Card className="bg-gradient-to-br from-card to-muted/20 border-border/70">
+        {/* Annual Recurring ARR */}
+        <Card className="bg-gradient-to-br from-card to-purple-500/5 border-border/70 shadow-sm">
           <CardContent className="p-5 flex items-center justify-between">
             <div>
               <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                Total Contract Portfolio
+                Annual Recurring (ARR)
               </p>
               <h3 className="text-2xl font-bold text-foreground mt-1">
-                {formatCurrency(totalPortfolioValue)}
+                {formatCurrency(annualARR)}
               </h3>
-              <p className="text-xs text-muted-foreground font-medium mt-1">
-                Cumulative Contract Value
+              <p className="text-xs text-purple-600 dark:text-purple-400 font-medium mt-1">
+                Active Annual Retainers
               </p>
             </div>
-            <div className="h-12 w-12 rounded-xl bg-violet-500/10 text-violet-600 flex items-center justify-center">
+            <div className="h-12 w-12 rounded-xl bg-purple-500/10 text-purple-600 flex items-center justify-center">
               <DollarSign className="h-6 w-6" />
             </div>
           </CardContent>
         </Card>
 
-        <Card className="bg-gradient-to-br from-card to-muted/20 border-border/70">
+        {/* Monthly Recurring MRR (Zero Averaging) */}
+        <Card className="bg-gradient-to-br from-card to-sky-500/5 border-border/70 shadow-sm">
           <CardContent className="p-5 flex items-center justify-between">
             <div>
               <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                 Monthly Recurring (MRR)
               </p>
               <h3 className="text-2xl font-bold text-foreground mt-1">
-                {formatCurrency(activeMRR)}
+                {formatCurrency(monthlyMRR)}
               </h3>
-              <p className="text-xs text-emerald-600 dark:text-emerald-400 font-medium mt-1">
-                Recurring Retainers
+              <p className="text-xs text-sky-600 dark:text-sky-400 font-medium mt-1">
+                {monthlyMRR > 0 ? "Active Monthly Retainers" : "$0.00/mo active"}
               </p>
             </div>
-            <div className="h-12 w-12 rounded-xl bg-emerald-500/10 text-emerald-600 flex items-center justify-center">
+            <div className="h-12 w-12 rounded-xl bg-sky-500/10 text-sky-600 flex items-center justify-center">
               <Clock className="h-6 w-6" />
             </div>
           </CardContent>
@@ -274,6 +281,8 @@ export default function CustomersPage() {
             const recurring = customer.financials?.recurringAmount || 0;
             const cycle = customer.financials?.billingCycle || "annually";
             const totalVal = customer.financials?.totalContractValue || 0;
+            const customerPaid = calculateCustomerPaidTotal(customer.id, invoices);
+            const isBeta = setup === 0 && recurring === 0;
 
             return (
               <Link
@@ -294,6 +303,11 @@ export default function CustomersPage() {
                           <Badge variant="purple" className="text-[10px] font-semibold py-0">
                             {customer.primaryProduct || "GovStax"}
                           </Badge>
+                          {isBeta && (
+                            <Badge variant="outline" className="text-[10px] font-semibold border-indigo-500/30 text-indigo-600 py-0">
+                              Beta Pilot ($0)
+                            </Badge>
+                          )}
                           <span className="text-xs text-muted-foreground">
                             • {customer.industry || "B2B Account"}
                           </span>
@@ -337,18 +351,18 @@ export default function CustomersPage() {
                     <div className="pt-2 border-t border-border/50 flex items-center justify-between text-xs">
                       <div>
                         <span className="text-[10px] uppercase tracking-wider text-muted-foreground block">
-                          Year 1 Total
+                          Paid to Date
                         </span>
-                        <span className="font-bold text-foreground">
-                          {formatCurrency(totalVal)}
+                        <span className="font-bold text-emerald-600 dark:text-emerald-400">
+                          {customerPaid > 0 ? formatCurrency(customerPaid) : "$0.00 (Unpaid)"}
                         </span>
                       </div>
                       <div className="text-right">
                         <span className="text-[10px] uppercase tracking-wider text-muted-foreground block">
-                          {setup > 0 ? `Build: ${formatCurrency(setup)} + Retainer` : "Retainer / Renewal"}
+                          {isBeta ? "Beta Tier" : setup > 0 ? `Build: ${formatCurrency(setup)} + Retainer` : "Retainer / Renewal"}
                         </span>
                         <span className="font-semibold text-indigo-600 dark:text-indigo-400">
-                          {formatCurrency(recurring)}/{cycle === "annually" ? "yr" : cycle === "monthly" ? "mo" : "qtr"}
+                          {isBeta ? "Free Tier" : `${formatCurrency(recurring)}/${cycle === "annually" ? "yr" : cycle === "monthly" ? "mo" : "qtr"}`}
                         </span>
                       </div>
                     </div>

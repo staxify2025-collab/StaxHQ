@@ -15,8 +15,8 @@ import { Label } from "@/components/ui/label";
 import { Customer, CustomerType, CustomerStatus, BillingCycle } from "@/types/crm";
 import { useTenant } from "@/lib/firebase/tenantContext";
 import { appConfig } from "@/config/appConfig";
-import { formatCurrency } from "@/lib/utils";
-import { Layers, Sparkles, DollarSign, Calculator } from "lucide-react";
+import { formatCurrency, formatPhoneNumber } from "@/lib/utils";
+import { Layers, Sparkles, DollarSign, Calculator, Calendar } from "lucide-react";
 
 interface CustomerModalProps {
   isOpen: boolean;
@@ -50,6 +50,13 @@ export function CustomerModal({ isOpen, onClose, initialData }: CustomerModalPro
   const [recurringAmount, setRecurringAmount] = useState<number>(initialData?.financials.recurringAmount || 0);
   const [billingCycle, setBillingCycle] = useState<BillingCycle>(initialData?.financials.billingCycle || "annually");
   const [totalValue, setTotalValue] = useState<number>(initialData?.financials.totalContractValue || 0);
+  const [renewalDayOfMonth, setRenewalDayOfMonth] = useState<number>(initialData?.financials.renewalDayOfMonth || 15);
+  const [nextRenewalDateStr, setNextRenewalDateStr] = useState<string>(
+    initialData?.financials.nextRenewalDate
+      ? new Date(initialData.financials.nextRenewalDate).toISOString().split("T")[0]
+      : ""
+  );
+  const [autoInvoicing, setAutoInvoicing] = useState<boolean>(initialData?.financials.autoInvoicing ?? true);
 
   // Synchronize state when initialData changes
   useEffect(() => {
@@ -72,25 +79,31 @@ export function CustomerModal({ isOpen, onClose, initialData }: CustomerModalPro
       setRecurringAmount(initialData.financials.recurringAmount || 0);
       setBillingCycle(initialData.financials.billingCycle || "annually");
       setTotalValue(initialData.financials.totalContractValue || 0);
+      setRenewalDayOfMonth(initialData.financials.renewalDayOfMonth || 15);
+      if (initialData.financials.nextRenewalDate) {
+        setNextRenewalDateStr(new Date(initialData.financials.nextRenewalDate).toISOString().split("T")[0]);
+      }
+      setAutoInvoicing(initialData.financials.autoInvoicing ?? true);
     }
   }, [initialData]);
 
-  // Compute first-year total automatically
-  const computedFirstYearRecurring =
-    billingCycle === "monthly"
+  // Compute first-year total automatically with precise decimal math
+  const computedFirstYearRecurring = Math.round(
+    (billingCycle === "monthly"
       ? recurringAmount * 12
       : billingCycle === "quarterly"
       ? recurringAmount * 4
       : billingCycle === "annually"
       ? recurringAmount
-      : 0;
+      : 0) * 100
+  ) / 100;
 
-  const computedFirstYearTotal = setupFee + computedFirstYearRecurring;
+  const computedFirstYearTotal = Math.round((setupFee + computedFirstYearRecurring) * 100) / 100;
 
   // Auto-fill total contract value on setup/recurring change if user hasn't overridden
   const handleSetupFeeChange = (val: number) => {
     setSetupFee(val);
-    setTotalValue(val + computedFirstYearRecurring);
+    setTotalValue(Math.round((val + computedFirstYearRecurring) * 100) / 100);
   };
 
   const handleRecurringAmountChange = (val: number) => {
@@ -103,7 +116,7 @@ export function CustomerModal({ isOpen, onClose, initialData }: CustomerModalPro
         : billingCycle === "annually"
         ? val
         : 0;
-    setTotalValue(setupFee + firstYr);
+    setTotalValue(Math.round((setupFee + firstYr) * 100) / 100);
   };
 
   const handleBillingCycleChange = (cycle: BillingCycle) => {
@@ -116,7 +129,7 @@ export function CustomerModal({ isOpen, onClose, initialData }: CustomerModalPro
         : cycle === "annually"
         ? recurringAmount
         : 0;
-    setTotalValue(setupFee + firstYr);
+    setTotalValue(Math.round((setupFee + firstYr) * 100) / 100);
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -155,8 +168,10 @@ export function CustomerModal({ isOpen, onClose, initialData }: CustomerModalPro
         billingCycle,
         totalContractValue: Number(totalValue) || computedFirstYearTotal,
         paymentStatus: initialData?.financials.paymentStatus || "current",
+        renewalDayOfMonth: Number(renewalDayOfMonth) || 15,
+        nextRenewalDate: nextRenewalDateStr ? new Date(nextRenewalDateStr).getTime() : undefined,
+        autoInvoicing,
         startDate: initialData?.financials.startDate || Date.now(),
-        nextRenewalDate: initialData?.financials.nextRenewalDate || Date.now() + 365 * 86400000,
       },
       projects: initialData?.projects || [
         {
@@ -361,8 +376,9 @@ export function CustomerModal({ isOpen, onClose, initialData }: CustomerModalPro
                 <Input
                   id="contactPhone"
                   value={contactPhone}
-                  onChange={(e) => setContactPhone(e.target.value)}
+                  onChange={(e) => setContactPhone(formatPhoneNumber(e.target.value))}
                   placeholder="(334) 555-0142"
+                  maxLength={14}
                 />
               </div>
             </div>
@@ -374,10 +390,28 @@ export function CustomerModal({ isOpen, onClose, initialData }: CustomerModalPro
               <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
                 3. Contract Financials, Build Fees & Retainers
               </h4>
-              <span className="text-[11px] text-indigo-600 dark:text-indigo-400 font-semibold flex items-center gap-1">
-                <Calculator className="h-3.5 w-3.5" />
-                <span>Auto-calculates Year 1 total</span>
-              </span>
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setSetupFee(0);
+                    setRecurringAmount(0);
+                    setTotalValue(0);
+                    setBillingCycle("one-time");
+                    setAutoInvoicing(false);
+                  }}
+                  className="h-6 px-2 text-[11px] gap-1 text-indigo-600 border-indigo-500/30 hover:bg-indigo-50 dark:hover:bg-indigo-950/40"
+                >
+                  <Sparkles className="h-3 w-3" />
+                  <span>Set as Beta Pilot / Free ($0)</span>
+                </Button>
+                <span className="text-[11px] text-muted-foreground font-semibold flex items-center gap-1">
+                  <Calculator className="h-3.5 w-3.5 text-indigo-600" />
+                  <span>Auto-calculates</span>
+                </span>
+              </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -390,9 +424,10 @@ export function CustomerModal({ isOpen, onClose, initialData }: CustomerModalPro
                 <Input
                   id="setupFee"
                   type="number"
-                  value={setupFee}
-                  onChange={(e) => handleSetupFeeChange(Number(e.target.value))}
-                  placeholder="2500"
+                  step="any"
+                  value={setupFee === 0 ? "0" : setupFee}
+                  onChange={(e) => handleSetupFeeChange(e.target.value === "" ? 0 : Number(e.target.value))}
+                  placeholder="0.00"
                 />
               </div>
 
@@ -405,9 +440,10 @@ export function CustomerModal({ isOpen, onClose, initialData }: CustomerModalPro
                 <Input
                   id="recurringAmount"
                   type="number"
-                  value={recurringAmount}
-                  onChange={(e) => handleRecurringAmountChange(Number(e.target.value))}
-                  placeholder="5000"
+                  step="any"
+                  value={recurringAmount === 0 ? "0" : recurringAmount}
+                  onChange={(e) => handleRecurringAmountChange(e.target.value === "" ? 0 : Number(e.target.value))}
+                  placeholder="0.00"
                 />
               </div>
 
@@ -423,7 +459,7 @@ export function CustomerModal({ isOpen, onClose, initialData }: CustomerModalPro
                   <option value="annually">Annually ($/year)</option>
                   <option value="monthly">Monthly ($/mo)</option>
                   <option value="quarterly">Quarterly ($/quarter)</option>
-                  <option value="one-time">One-Time Only (No Retainer)</option>
+                  <option value="one-time">One-Time Only ($0 or Project)</option>
                 </select>
               </div>
             </div>
@@ -474,10 +510,63 @@ export function CustomerModal({ isOpen, onClose, initialData }: CustomerModalPro
               <Input
                 id="totalValue"
                 type="number"
-                value={totalValue}
-                onChange={(e) => setTotalValue(Number(e.target.value))}
+                step="any"
+                value={totalValue === 0 ? "" : totalValue}
+                onChange={(e) => setTotalValue(e.target.value === "" ? 0 : Number(e.target.value))}
                 placeholder="7500"
               />
+            </div>
+
+            {/* Renewal Schedule & Automated Invoicing */}
+            <div className="p-3.5 rounded-xl bg-muted/40 border border-border/80 space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                  <Calendar className="h-4 w-4 text-indigo-600" />
+                  <span>Automated Renewal Schedule & Invoice Triggers</span>
+                </span>
+                <label className="flex items-center gap-1.5 text-xs text-foreground cursor-pointer font-medium">
+                  <input
+                    type="checkbox"
+                    checked={autoInvoicing}
+                    onChange={(e) => setAutoInvoicing(e.target.checked)}
+                    className="rounded border-input text-primary focus:ring-primary h-3.5 w-3.5"
+                  />
+                  <span>Auto-Invoicing Enabled</span>
+                </label>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                <div>
+                  <Label htmlFor="renewDay" className="text-xs">Renewal Day of Month</Label>
+                  <Input
+                    id="renewDay"
+                    type="number"
+                    min={1}
+                    max={31}
+                    value={renewalDayOfMonth}
+                    onChange={(e) => setRenewalDayOfMonth(Number(e.target.value))}
+                    placeholder="15"
+                    className="mt-1 text-xs"
+                  />
+                  <p className="text-[10px] text-muted-foreground mt-0.5">
+                    e.g. 15th of each month / renewal cycle.
+                  </p>
+                </div>
+
+                <div>
+                  <Label htmlFor="nextRenewDate" className="text-xs">Next Upcoming Renewal Date</Label>
+                  <Input
+                    id="nextRenewDate"
+                    type="date"
+                    value={nextRenewalDateStr}
+                    onChange={(e) => setNextRenewalDateStr(e.target.value)}
+                    className="mt-1 text-xs"
+                  />
+                  <p className="text-[10px] text-muted-foreground mt-0.5">
+                    {billingCycle === "monthly" ? "10-day notice trigger" : "30-day notice trigger"}
+                  </p>
+                </div>
+              </div>
             </div>
           </div>
 

@@ -2,8 +2,19 @@ export type CustomerType = 'customer' | 'prospect' | 'partner';
 export type CustomerStatus = 'lead' | 'contacted' | 'proposal_sent' | 'active' | 'churned';
 export type BillingCycle = 'monthly' | 'annually' | 'quarterly' | 'one-time';
 export type PaymentStatus = 'current' | 'pending' | 'overdue' | 'paid';
-export type DocumentType = 'agreement' | 'proposal' | 'nda' | 'sla' | 'invoice' | 'custom';
-export type DocumentStatus = 'draft' | 'sent_for_signature' | 'signed' | 'expired';
+export type DocumentScope = 'company_vault' | 'client_contract' | 'template';
+export type DocumentType = 
+  | 'agreement' 
+  | 'proposal' 
+  | 'nda' 
+  | 'sla' 
+  | 'invoice' 
+  | 'tax_w9' 
+  | 'llc_legal' 
+  | 'insurance' 
+  | 'memo' 
+  | 'custom';
+export type DocumentStatus = 'draft' | 'sent_for_signature' | 'signed' | 'official_record' | 'expired';
 export type NoteCategory = 'general' | 'call_log' | 'meeting' | 'urgent' | 'contract';
 export type EventType = 'meeting' | 'demo' | 'block' | 'milestone';
 export type UserRole = 'admin' | 'employee';
@@ -48,8 +59,128 @@ export interface FinancialRecord {
   recurringAmount: number;
   billingCycle: BillingCycle;
   paymentStatus: PaymentStatus;
+  renewalDayOfMonth?: number; // e.g. 15 (15th of each month / year)
   nextRenewalDate?: number;
+  autoInvoicing?: boolean;
   startDate?: number;
+}
+
+export type InvoiceStatus = 'draft' | 'sent' | 'reminder_sent' | 'overdue' | 'paid' | 'cancelled';
+
+export interface InvoiceLineItem {
+  id: string;
+  description: string;
+  quantity: number;
+  unitPrice: number;
+  amount: number;
+}
+
+export interface Invoice {
+  id: string;
+  orgId: string;
+  invoiceNumber: string; // e.g. "INV-2026-001"
+  customerId: string;
+  customerName: string;
+  issueDate: number;
+  dueDate: number;
+  status: InvoiceStatus;
+  billingCycle: BillingCycle;
+  lineItems: InvoiceLineItem[];
+  subtotal: number;
+  tax: number;
+  total: number;
+  notes?: string;
+  remitTo: string;
+  sentAt?: number;
+  paidAt?: number;
+  reminderSentAt?: number;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export type ExpenseCategory = 
+  | 'owner_draw' 
+  | 'ai_apis' 
+  | 'cloud_infra' 
+  | 'dev_tools' 
+  | 'legal_admin' 
+  | 'contractors' 
+  | 'office_travel' 
+  | 'revenue_inflow' 
+  | 'other';
+
+export type TransactionType = 'debit' | 'credit';
+
+export interface BankTransaction {
+  id: string;
+  orgId: string;
+  date: number; // timestamp in ms
+  description: string;
+  payeeClean: string; // e.g. "Vercel Inc."
+  amount: number; // always positive magnitude
+  type: TransactionType; // 'debit' (spending/draw) | 'credit' (inflow/deposit)
+  category: ExpenseCategory;
+  partnerName?: string; // e.g. "JOSH", "Admin Operator", "Split 50/50"
+  memo?: string;
+  isRecurring?: boolean;
+  importedAt: number;
+  sourceFile?: string;
+}
+
+export interface PartnerEquitySummary {
+  partnerName: string;
+  totalDrawsYtd: number;
+  drawCount: number;
+  recentDraws: BankTransaction[];
+  targetSharePercent?: number; // e.g. 50%
+}
+
+export type ProjectStage = 
+  | 'theory' 
+  | 'not_started' 
+  | 'in_progress' 
+  | 'needs_attention' 
+  | 'completed';
+
+export type ProjectPriority = 'low' | 'medium' | 'high' | 'urgent';
+
+export interface ProjectTaskItem {
+  id: string;
+  text: string;
+  completed: boolean;
+}
+
+export interface ProjectNoteItem {
+  id: string;
+  authorId?: string;
+  authorName: string;
+  content: string;
+  createdAt: number;
+}
+
+export interface ProjectAssignee {
+  name: string;
+  email?: string;
+  avatar?: string;
+}
+
+export interface ProjectCard {
+  id: string;
+  orgId: string;
+  title: string;
+  description?: string;
+  stage: ProjectStage;
+  priority: ProjectPriority;
+  assignees: ProjectAssignee[];
+  customerId?: string;
+  customerName?: string;
+  tags: string[];
+  tasks: ProjectTaskItem[];
+  notes: ProjectNoteItem[];
+  progressPercentage?: number;
+  targetLaunchDate?: number;
+  createdAt: number;
+  updatedAt: number;
 }
 
 export interface ProjectDeployment {
@@ -88,10 +219,29 @@ export interface Customer {
   updatedAt: number;
 }
 
+export type SignaturePlacement = 'dual' | 'single_client' | 'none';
+
+export interface ContractTemplate {
+  id: string;
+  orgId: string;
+  title: string;
+  description?: string;
+  productTag?: string; // e.g. "GovStax", "Company Pulse", "All"
+  category: 'agreement' | 'nda' | 'sow' | 'memo' | 'w9_summary' | 'custom';
+  defaultWatermark: WatermarkOption;
+  signaturePlacement: SignaturePlacement;
+  scopeAndTermsText: string;
+  additionalProvisions?: string;
+  isDefault?: boolean;
+  createdAt: number;
+  updatedAt: number;
+}
+
 export interface ContractDocument {
   id: string;
   orgId: string;
-  customerId: string;
+  scope?: DocumentScope;
+  customerId?: string; // Optional for company vault assets
   customerName?: string;
   title: string;
   type: DocumentType;
@@ -99,9 +249,13 @@ export interface ContractDocument {
   fileUrl?: string;
   fileName?: string;
   fileSizeBytes?: number;
-  contentHtml?: string; // For built-in contracts / templates
+  contentHtml?: string; // For custom body / notes
+  templateType?: 'msa' | 'nda' | 'sow' | 'memo' | 'w9_summary' | 'custom';
+  templateData?: Record<string, any>;
+  isGenerated?: boolean;
   watermarkText?: string;
   signatureRequired: boolean;
+  signaturePlacement?: SignaturePlacement;
   signatureData?: {
     signerName: string;
     signerEmail: string;
@@ -133,6 +287,14 @@ export interface ActivityNote {
   createdAt: number;
 }
 
+export type WatermarkOption = 
+  | "NONE" 
+  | "CONFIDENTIAL" 
+  | "DRAFT" 
+  | "FOR REVIEW ONLY" 
+  | "INTERNAL USE ONLY" 
+  | "STAXIFY";
+
 export interface CalendarEvent {
   id: string;
   orgId: string;
@@ -146,7 +308,37 @@ export interface CalendarEvent {
   location?: string;
   attendeeUserIds: string[];
   type: EventType;
+  reminderMinutes?: number; // 0, 15, 30, 60, 120, 1440
+  reminded?: boolean;
   googleEventId?: string;
   syncStatus?: 'synced' | 'local_only';
+  createdAt: number;
+}
+
+export type NotificationType = 
+  | 'mention' 
+  | 'contract_signed' 
+  | 'contract_sent'
+  | 'contract_pending' 
+  | 'invoice_created'
+  | 'invoice_overdue'
+  | 'urgent_alert' 
+  | 'customer_milestone' 
+  | 'system';
+
+export interface AppNotification {
+  id: string;
+  orgId: string;
+  recipientUserId: string; // e.g. "usr-admin-1", "all", or specific user uid
+  senderUserId?: string;
+  senderName?: string;
+  type: NotificationType;
+  title: string;
+  messageSnippet: string;
+  targetUrl?: string; // e.g. "/customers/cust-1", "/documents"
+  customerId?: string;
+  customerName?: string;
+  documentId?: string;
+  read: boolean;
   createdAt: number;
 }

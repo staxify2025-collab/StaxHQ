@@ -13,15 +13,18 @@ import {
   CheckCircle2, 
   Sparkles,
   ExternalLink,
-  RefreshCw
+  RefreshCw,
+  Users,
+  Edit2,
+  Bell
 } from "lucide-react";
 import { useTenant } from "@/lib/firebase/tenantContext";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { EventModal } from "@/components/calendar/EventModal";
-import { formatDate } from "@/lib/utils";
-import { EventType } from "@/types/crm";
+import { formatDate, getInitials } from "@/lib/utils";
+import { CalendarEvent, EventType } from "@/types/crm";
 import { 
   format, 
   addMonths, 
@@ -56,10 +59,11 @@ const eventTypeStyles: Record<EventType, { badge: string; bg: string }> = {
 };
 
 export default function CalendarPage() {
-  const { events, deleteEvent, customers } = useTenant();
+  const { events, deleteEvent, customers, teamMembers } = useTenant();
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | undefined>(undefined);
   const [viewMode, setViewMode] = useState<"month" | "agenda">("month");
 
   const monthStart = startOfMonth(currentDate);
@@ -76,6 +80,18 @@ export default function CalendarPage() {
     setSelectedDate(new Date());
   };
 
+  const openCreateModal = (day?: Date) => {
+    if (day) setSelectedDate(day);
+    setSelectedEvent(undefined);
+    setIsModalOpen(true);
+  };
+
+  const openEditModal = (evt: CalendarEvent) => {
+    setSelectedEvent(evt);
+    setSelectedDate(new Date(evt.start));
+    setIsModalOpen(true);
+  };
+
   const selectedDayEvents = events.filter((evt) =>
     isSameDay(new Date(evt.start), selectedDate)
   );
@@ -90,7 +106,7 @@ export default function CalendarPage() {
             <span>Calendar & Schedule Board</span>
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Block focus time, schedule client reviews, and sync with your Google Workspace calendar.
+            Block focus time, schedule client reviews, tag team employees, and sync with Google Calendar.
           </p>
         </div>
 
@@ -98,11 +114,11 @@ export default function CalendarPage() {
           {/* Google Sync Badge */}
           <div className="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-xs font-semibold text-emerald-700 dark:text-emerald-400">
             <RefreshCw className="h-3.5 w-3.5" />
-            <span>Google Workspace Synced</span>
+            <span>Google Workspace Sync Ready</span>
           </div>
 
           <Button
-            onClick={() => setIsModalOpen(true)}
+            onClick={() => openCreateModal()}
             variant="gradient"
             className="gap-2 shadow-md"
           >
@@ -188,7 +204,8 @@ export default function CalendarPage() {
                   <div
                     key={idx}
                     onClick={() => setSelectedDate(day)}
-                    className={`min-h-[110px] p-2 transition-colors cursor-pointer flex flex-col justify-between ${
+                    onDoubleClick={() => openCreateModal(day)}
+                    className={`min-h-[115px] p-2 transition-colors cursor-pointer flex flex-col justify-between ${
                       !isCurrentMonth ? "bg-muted/10 opacity-40" : "bg-card"
                     } ${isSelected ? "ring-2 ring-inset ring-indigo-500 bg-indigo-50/20" : "hover:bg-muted/30"}`}
                   >
@@ -216,11 +233,19 @@ export default function CalendarPage() {
                       {dayEvents.slice(0, 2).map((evt) => (
                         <div
                           key={evt.id}
-                          className={`px-1.5 py-0.5 rounded text-[10px] font-medium truncate ${
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openEditModal(evt);
+                          }}
+                          className={`px-1.5 py-0.5 rounded text-[10px] font-medium truncate cursor-pointer hover:opacity-80 transition-opacity flex items-center justify-between gap-1 ${
                             eventTypeStyles[evt.type]?.bg || "bg-muted text-foreground"
                           }`}
+                          title={`Click to edit: ${evt.title}`}
                         >
-                          {evt.title}
+                          <span className="truncate">{evt.title}</span>
+                          {evt.reminderMinutes && evt.reminderMinutes > 0 && (
+                            <Bell className="h-2.5 w-2.5 shrink-0 opacity-60" />
+                          )}
                         </div>
                       ))}
                       {dayEvents.length > 2 && (
@@ -253,32 +278,37 @@ export default function CalendarPage() {
                   <div className="py-8 text-center text-xs text-muted-foreground">
                     No meetings or blocks scheduled for this day.
                     <Button
-                      onClick={() => setIsModalOpen(true)}
+                      onClick={() => openCreateModal(selectedDate)}
                       variant="outline"
                       size="sm"
                       className="mt-3 text-xs w-full"
                     >
-                      + Add Meeting
+                      + Schedule Meeting
                     </Button>
                   </div>
                 ) : (
                   selectedDayEvents.map((evt) => {
                     const customer = customers.find((c) => c.id === evt.customerId);
+                    const attendees = (evt.attendeeUserIds || [])
+                      .map((uid) => teamMembers.find((m) => m.uid === uid))
+                      .filter(Boolean);
+
                     return (
                       <div
                         key={evt.id}
-                        className="p-3 rounded-xl border border-border/80 bg-muted/20 space-y-2 text-xs"
+                        onClick={() => openEditModal(evt)}
+                        className="p-3.5 rounded-2xl border border-border/80 bg-muted/20 hover:border-indigo-500/50 hover:bg-muted/40 transition-all space-y-2.5 text-xs cursor-pointer group relative"
+                        title="Click to edit event details"
                       >
                         <div className="flex items-start justify-between gap-1">
-                          <h4 className="font-bold text-foreground leading-tight">
+                          <h4 className="font-bold text-foreground leading-tight group-hover:text-indigo-600 transition-colors">
                             {evt.title}
                           </h4>
-                          <button
-                            onClick={() => deleteEvent(evt.id)}
-                            className="text-muted-foreground hover:text-rose-600 p-0.5"
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </button>
+                          <div className="flex items-center gap-1 opacity-60 group-hover:opacity-100">
+                            <span className="p-1 rounded text-muted-foreground hover:text-indigo-600">
+                              <Edit2 className="h-3 w-3" />
+                            </span>
+                          </div>
                         </div>
 
                         <div className="flex items-center gap-1.5 text-muted-foreground text-[11px]">
@@ -292,20 +322,47 @@ export default function CalendarPage() {
                         {customer && (
                           <div className="flex items-center gap-1 text-[11px] text-indigo-600 dark:text-indigo-400 font-medium">
                             <Building2 className="h-3 w-3" />
-                            <Link href={`/customers/${customer.id}`} className="hover:underline">
-                              {customer.name}
-                            </Link>
+                            <span>{customer.name}</span>
+                          </div>
+                        )}
+
+                        {/* Attendees Avatars */}
+                        {attendees.length > 0 && (
+                          <div className="flex items-center gap-1.5 pt-1 border-t border-border/40">
+                            <span className="text-[10px] text-muted-foreground font-medium">
+                              Team:
+                            </span>
+                            <div className="flex items-center gap-1 flex-wrap">
+                              {attendees.map((att, i) => (
+                                <span
+                                  key={i}
+                                  className="px-1.5 py-0.5 rounded-md bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 text-[10px] font-semibold"
+                                >
+                                  {att?.displayName || "Member"}
+                                </span>
+                              ))}
+                            </div>
                           </div>
                         )}
 
                         {evt.description && (
-                          <p className="text-[11px] text-muted-foreground pt-1 border-t border-border/40">
+                          <p className="text-[11px] text-muted-foreground pt-1 border-t border-border/40 line-clamp-2">
                             {evt.description}
                           </p>
                         )}
                       </div>
                     );
                   })
+                )}
+                {selectedDayEvents.length > 0 && (
+                  <Button
+                    onClick={() => openCreateModal(selectedDate)}
+                    variant="outline"
+                    size="sm"
+                    className="text-xs w-full mt-2"
+                  >
+                    + Add Another Event
+                  </Button>
                 )}
               </CardContent>
             </Card>
@@ -319,49 +376,86 @@ export default function CalendarPage() {
             {events.length === 0 ? (
               <p className="py-8 text-center text-xs text-muted-foreground">No events on schedule.</p>
             ) : (
-              events.map((evt) => (
-                <div key={evt.id} className="py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                  <div className="flex items-start gap-3">
-                    <div className="p-2.5 rounded-xl bg-indigo-500/10 text-indigo-600 font-bold text-xs flex items-center justify-center">
-                      <CalendarIcon className="h-5 w-5" />
-                    </div>
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <h4 className="text-sm font-bold text-foreground">{evt.title}</h4>
-                        <span
-                          className={`text-[10px] px-2 py-0.5 rounded-full border font-semibold uppercase ${
-                            eventTypeStyles[evt.type]?.badge
-                          }`}
-                        >
-                          {evt.type}
-                        </span>
+              events.map((evt) => {
+                const attendees = (evt.attendeeUserIds || [])
+                  .map((uid) => teamMembers.find((m) => m.uid === uid))
+                  .filter(Boolean);
+
+                return (
+                  <div 
+                    key={evt.id} 
+                    onClick={() => openEditModal(evt)}
+                    className="py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 cursor-pointer hover:bg-muted/20 px-2 rounded-xl transition-colors group"
+                  >
+                    <div className="flex items-start gap-3">
+                      <div className="p-2.5 rounded-xl bg-indigo-500/10 text-indigo-600 font-bold text-xs flex items-center justify-center">
+                        <CalendarIcon className="h-5 w-5" />
                       </div>
-                      <p className="text-xs text-muted-foreground mt-0.5 flex items-center gap-2">
-                        <span>{formatDate(evt.start)}</span>
-                        <span>•</span>
-                        <span>
-                          {format(new Date(evt.start), "h:mm a")} - {format(new Date(evt.end), "h:mm a")}
-                        </span>
-                        {evt.customerName && (
-                          <>
-                            <span>•</span>
-                            <span className="font-medium text-foreground">{evt.customerName}</span>
-                          </>
-                        )}
-                      </p>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <h4 className="text-sm font-bold text-foreground group-hover:text-indigo-600 transition-colors">
+                            {evt.title}
+                          </h4>
+                          <span
+                            className={`text-[10px] px-2 py-0.5 rounded-full border font-semibold uppercase ${
+                              eventTypeStyles[evt.type]?.badge
+                            }`}
+                          >
+                            {evt.type}
+                          </span>
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-0.5 flex items-center gap-2 flex-wrap">
+                          <span>{formatDate(evt.start)}</span>
+                          <span>•</span>
+                          <span>
+                            {format(new Date(evt.start), "h:mm a")} - {format(new Date(evt.end), "h:mm a")}
+                          </span>
+                          {evt.customerName && (
+                            <>
+                              <span>•</span>
+                              <span className="font-medium text-foreground">{evt.customerName}</span>
+                            </>
+                          )}
+                          {attendees.length > 0 && (
+                            <>
+                              <span>•</span>
+                              <span className="text-indigo-600 dark:text-indigo-400 font-medium">
+                                With {attendees.map(a => a?.displayName).join(", ")}
+                              </span>
+                            </>
+                          )}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 self-end sm:self-center">
+                      <Button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          openEditModal(evt);
+                        }}
+                        variant="outline"
+                        size="sm"
+                        className="text-xs gap-1"
+                      >
+                        <Edit2 className="h-3.5 w-3.5" />
+                        <span>Edit</span>
+                      </Button>
+                      <Button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          deleteEvent(evt.id);
+                        }}
+                        variant="ghost"
+                        size="sm"
+                        className="text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
                     </div>
                   </div>
-
-                  <Button
-                    onClick={() => deleteEvent(evt.id)}
-                    variant="ghost"
-                    size="sm"
-                    className="text-rose-600 self-end sm:self-center"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </div>
-              ))
+                );
+              })
             )}
           </div>
         </div>
@@ -369,8 +463,12 @@ export default function CalendarPage() {
 
       <EventModal
         isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
+        onClose={() => {
+          setIsModalOpen(false);
+          setSelectedEvent(undefined);
+        }}
         initialDate={selectedDate}
+        initialData={selectedEvent}
       />
     </div>
   );

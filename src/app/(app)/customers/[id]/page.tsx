@@ -35,10 +35,19 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { ActivityFeed } from "@/components/notes/ActivityFeed";
 import { CustomerModal } from "@/components/customers/CustomerModal";
 import { DocumentUploaderModal } from "@/components/documents/DocumentUploaderModal";
+import { DocumentCreatorModal } from "@/components/documents/DocumentCreatorModal";
+import { SendSignatureModal } from "@/components/documents/SendSignatureModal";
 import { SignatureCanvasModal } from "@/components/documents/SignatureCanvasModal";
-import { downloadContractPdf, printContractPdf } from "@/lib/pdf/pdfGenerator";
+import { 
+  downloadContractPdf, 
+  printContractPdf, 
+  downloadInvoicePdf, 
+  printInvoicePdf 
+} from "@/lib/pdf/pdfGenerator";
 import { formatCurrency, formatDate, getInitials } from "@/lib/utils";
 import { ContractDocument } from "@/types/crm";
+import { Send, Wallet, Receipt } from "lucide-react";
+import { calculateCustomerPaidTotal } from "@/lib/financials/financialCalculations";
 
 export default function CustomerDetailPage() {
   const params = useParams();
@@ -48,6 +57,7 @@ export default function CustomerDetailPage() {
   const { 
     customers, 
     contracts, 
+    invoices,
     deleteCustomer, 
     updateContract, 
     activeOrg 
@@ -55,10 +65,14 @@ export default function CustomerDetailPage() {
 
   const customer = (customers || []).find((c) => c.id === customerId);
   const customerContracts = (contracts || []).filter((d) => d.customerId === customerId);
+  const customerInvoices = (invoices || []).filter((i) => i.customerId === customerId);
+  const customerPaidTotal = calculateCustomerPaidTotal(customerId, invoices);
 
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [signDoc, setSignDoc] = useState<ContractDocument | null>(null);
+  const [sendDoc, setSendDoc] = useState<ContractDocument | null>(null);
 
   if (!customer) {
     return (
@@ -175,15 +189,16 @@ export default function CustomerDetailPage() {
 
       {/* KPI Stats Ribbon */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {/* Realized Cash Paid to Date */}
         <div className="p-4 rounded-xl bg-card border border-border/80 shadow-sm">
           <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground block">
-            One-Time Build Fee
+            Total Paid to Date
           </span>
-          <span className="text-xl font-bold text-foreground mt-1 block">
-            {setup > 0 ? formatCurrency(setup) : "No Setup Fee"}
+          <span className="text-xl font-bold text-emerald-600 dark:text-emerald-400 mt-1 block">
+            {customerPaidTotal > 0 ? formatCurrency(customerPaidTotal) : "$0.00"}
           </span>
           <span className="text-[11px] text-muted-foreground mt-0.5 block">
-            Initial Setup & Build
+            Realized Cash from Invoices
           </span>
         </div>
 
@@ -192,42 +207,53 @@ export default function CustomerDetailPage() {
             Ongoing Retainer
           </span>
           <span className="text-xl font-bold text-indigo-600 dark:text-indigo-400 mt-1 block">
-            {formatCurrency(recurring)}
+            {recurring > 0 ? formatCurrency(recurring) : "Free / Beta"}
           </span>
           <span className="text-[11px] text-emerald-600 dark:text-emerald-400 font-medium mt-0.5 block capitalize">
-            {cycle === "annually" ? "Per Year" : cycle === "monthly" ? "Per Month" : cycle === "quarterly" ? "Per Quarter" : "One-Time"}
+            {recurring > 0
+              ? cycle === "annually"
+                ? "Per Year"
+                : cycle === "monthly"
+                ? "Per Month"
+                : cycle === "quarterly"
+                ? "Per Quarter"
+                : "One-Time"
+              : "No Recurring Fee"}
           </span>
         </div>
 
         <div className="p-4 rounded-xl bg-card border border-border/80 shadow-sm">
           <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground block">
-            Year 1 Total Investment
+            Contract Commitment
           </span>
           <span className="text-xl font-bold text-foreground mt-1 block">
             {formatCurrency(customer.financials?.totalContractValue || 0)}
           </span>
-          <span className="text-[11px] text-emerald-600 dark:text-emerald-400 font-medium mt-0.5 block">
-            Build Fee + First Year
+          <span className="text-[11px] text-muted-foreground font-medium mt-0.5 block">
+            {setup > 0 ? `Build (${formatCurrency(setup)}) + Retainer` : "Annual / Ongoing"}
           </span>
         </div>
 
         <div className="p-4 rounded-xl bg-card border border-border/80 shadow-sm">
           <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground block">
-            Documents & Contracts
+            Invoices & Contracts
           </span>
           <span className="text-xl font-bold text-foreground mt-1 block">
-            {customerContracts.length} Files
+            {customerInvoices.length} Invoices
           </span>
-          <span className="text-[11px] text-emerald-600 dark:text-emerald-400 font-medium mt-0.5 block">
-            {customerContracts.filter((d) => d.status === "signed").length} Executed
+          <span className="text-[11px] text-indigo-600 dark:text-indigo-400 font-medium mt-0.5 block">
+            {customerContracts.length} Legal Documents
           </span>
         </div>
       </div>
 
       {/* Main Command Center Tabs */}
       <Tabs defaultValue="overview" className="space-y-4">
-        <TabsList className="grid grid-cols-4 max-w-xl">
+        <TabsList className="grid grid-cols-5 max-w-2xl">
           <TabsTrigger value="overview">Overview</TabsTrigger>
+          <TabsTrigger value="invoices">
+            Invoices ({customerInvoices.length})
+          </TabsTrigger>
           <TabsTrigger value="documents">
             Documents ({customerContracts.length})
           </TabsTrigger>
@@ -336,15 +362,26 @@ export default function CustomerDetailPage() {
                       Official legal documents, SLAs, and proposals on file
                     </CardDescription>
                   </div>
-                  <Button
-                    onClick={() => setIsUploadModalOpen(true)}
-                    size="sm"
-                    variant="outline"
-                    className="gap-1 text-xs"
-                  >
-                    <Plus className="h-3.5 w-3.5" />
-                    <span>Add File</span>
-                  </Button>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      onClick={() => setIsCreateModalOpen(true)}
+                      size="sm"
+                      variant="gradient"
+                      className="gap-1 text-xs shadow-sm"
+                    >
+                      <Sparkles className="h-3.5 w-3.5" />
+                      <span>Generate Doc</span>
+                    </Button>
+                    <Button
+                      onClick={() => setIsUploadModalOpen(true)}
+                      size="sm"
+                      variant="outline"
+                      className="gap-1 text-xs"
+                    >
+                      <Plus className="h-3.5 w-3.5" />
+                      <span>Upload</span>
+                    </Button>
+                  </div>
                 </CardHeader>
                 <CardContent className="p-5 space-y-2.5">
                   {customerContracts.length === 0 ? (
@@ -404,7 +441,114 @@ export default function CustomerDetailPage() {
           </div>
         </TabsContent>
 
-        {/* TAB 2: DOCUMENTS & CONTRACTS */}
+        {/* TAB 2: INVOICES & BILLING HISTORY */}
+        <TabsContent value="invoices" className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-lg font-bold text-foreground">Invoicing & Cash Collection Ledger</h3>
+              <p className="text-xs text-muted-foreground">
+                Track generated invoices, sent remittance requests, and paid transaction receipts.
+              </p>
+            </div>
+            <Link href="/financials">
+              <Button variant="gradient" size="sm" className="gap-1.5 text-xs shadow-sm">
+                <Receipt className="h-3.5 w-3.5" />
+                <span>Financials & Renewal Hub</span>
+              </Button>
+            </Link>
+          </div>
+
+          <div className="space-y-3">
+            {customerInvoices.length === 0 ? (
+              <div className="p-12 text-center border border-dashed border-border rounded-2xl bg-card">
+                <Receipt className="h-10 w-10 text-muted-foreground/40 mx-auto mb-2" />
+                <p className="text-sm font-semibold text-foreground">No invoices generated yet</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Invoices are auto-drafted during renewal cycles or can be created in the Financial Hub.
+                </p>
+              </div>
+            ) : (
+              customerInvoices.map((inv) => (
+                <div
+                  key={inv.id}
+                  className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-xl bg-card border border-border/80 shadow-sm"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className={`h-10 w-10 rounded-xl flex items-center justify-center font-bold text-xs ${
+                      inv.status === "paid"
+                        ? "bg-emerald-500/10 text-emerald-600"
+                        : inv.status === "overdue"
+                        ? "bg-rose-500/10 text-rose-600"
+                        : "bg-indigo-500/10 text-indigo-600"
+                    }`}>
+                      <Receipt className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-foreground font-mono text-sm">
+                          {inv.invoiceNumber}
+                        </span>
+                        <Badge
+                          variant={
+                            inv.status === "paid"
+                              ? "success"
+                              : inv.status === "overdue"
+                              ? "destructive"
+                              : inv.status === "sent"
+                              ? "warning"
+                              : "secondary"
+                          }
+                          className="text-[10px] uppercase font-bold"
+                        >
+                          {inv.status.replace("_", " ")}
+                        </Badge>
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        Issued: {formatDate(inv.issueDate)} • Due: {formatDate(inv.dueDate)} • {inv.billingCycle || "annual"}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between sm:justify-end gap-3">
+                    <div className="text-right">
+                      <span className="text-base font-bold text-foreground block">
+                        {formatCurrency(inv.total)}
+                      </span>
+                      <span className="text-[11px] text-muted-foreground">
+                        {inv.status === "paid" && inv.paidAt
+                          ? `Paid on ${formatDate(inv.paidAt)}`
+                          : "Awaiting payment"}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-1.5">
+                      <Button
+                        onClick={() => downloadInvoicePdf({ invoice: inv, customer, org: activeOrg })}
+                        size="sm"
+                        variant="outline"
+                        className="h-8 gap-1 text-xs"
+                      >
+                        <Download className="h-3.5 w-3.5" />
+                        <span>PDF</span>
+                      </Button>
+                      <Button
+                        onClick={() => printInvoicePdf({ invoice: inv, customer, org: activeOrg })}
+                        size="sm"
+                        variant="outline"
+                        className="h-8 gap-1 text-xs"
+                      >
+                        <Printer className="h-3.5 w-3.5" />
+                        <span>Print</span>
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </TabsContent>
+
+        {/* TAB 3: DOCUMENTS & CONTRACTS */}
         <TabsContent value="documents" className="space-y-4">
           <div className="flex items-center justify-between">
             <div>
@@ -413,15 +557,26 @@ export default function CustomerDetailPage() {
                 Manage, print, watermark, and send contracts for digital signature.
               </p>
             </div>
-            <Button
-              onClick={() => setIsUploadModalOpen(true)}
-              variant="gradient"
-              size="sm"
-              className="gap-1.5"
-            >
-              <Plus className="h-4 w-4" />
-              <span>Upload Document</span>
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button
+                onClick={() => setIsCreateModalOpen(true)}
+                variant="gradient"
+                size="sm"
+                className="gap-1.5 text-xs shadow-sm"
+              >
+                <Sparkles className="h-3.5 w-3.5" />
+                <span>Generate from Template</span>
+              </Button>
+              <Button
+                onClick={() => setIsUploadModalOpen(true)}
+                variant="outline"
+                size="sm"
+                className="gap-1.5 text-xs"
+              >
+                <Plus className="h-4 w-4" />
+                <span>Upload Document</span>
+              </Button>
+            </div>
           </div>
 
           <div className="grid grid-cols-1 gap-3">
@@ -469,6 +624,19 @@ export default function CustomerDetailPage() {
 
                   {/* Document Actions */}
                   <div className="flex items-center gap-2 shrink-0">
+                    {doc.signatureRequired && doc.status !== "signed" && (
+                      <Button
+                        onClick={() => setSendDoc(doc)}
+                        size="sm"
+                        variant="outline"
+                        className="gap-1 text-xs border-indigo-500/40 text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-950/50"
+                        title="Send via Gmail from jeff@staxifytech.com"
+                      >
+                        <Send className="h-3.5 w-3.5" />
+                        <span>Send</span>
+                      </Button>
+                    )}
+
                     {doc.status !== "signed" && (
                       <Button
                         onClick={() => setSignDoc(doc)}
@@ -614,12 +782,26 @@ export default function CustomerDetailPage() {
         defaultCustomerId={customer.id}
       />
 
+      <DocumentCreatorModal
+        isOpen={isCreateModalOpen}
+        onClose={() => setIsCreateModalOpen(false)}
+        defaultCustomerId={customer.id}
+        onSendForSignature={(created) => setSendDoc(created)}
+      />
+
       <SignatureCanvasModal
         isOpen={!!signDoc}
         onClose={() => setSignDoc(null)}
         document={signDoc}
         onSignComplete={handleSignComplete}
       />
+
+      <SendSignatureModal
+        isOpen={!!sendDoc}
+        onClose={() => setSendDoc(null)}
+        document={sendDoc}
+      />
     </div>
   );
 }
+

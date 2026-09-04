@@ -16,7 +16,8 @@ import {
   Sparkles,
   ExternalLink,
   ChevronRight,
-  LogOut
+  LogOut,
+  FolderKanban
 } from "lucide-react";
 import { useTenant } from "@/lib/firebase/tenantContext";
 import { Badge } from "@/components/ui/badge";
@@ -33,6 +34,11 @@ const navigationItems = [
     name: "Customers & Pipeline",
     href: "/customers",
     icon: Users,
+  },
+  {
+    name: "Projects & Roadmap",
+    href: "/projects",
+    icon: FolderKanban,
   },
   {
     name: "Documents & Contracts",
@@ -60,7 +66,7 @@ const navigationItems = [
 
 export function AppSidebar() {
   const pathname = usePathname();
-  const { isDemoMode, activeOrg, currentRole, customers, contracts, currentUser, logout } = useTenant();
+  const { isDemoMode, activeOrg, currentRole, customers, contracts, projects, currentUser, logout } = useTenant();
 
   return (
     <aside className="w-64 bg-card border-r border-border/80 flex flex-col h-screen sticky top-0 shrink-0 select-none">
@@ -136,6 +142,17 @@ export function AppSidebar() {
                   }`}
                 >
                   {customers.length}
+                </span>
+              )}
+              {item.href === "/projects" && (projects || []).length > 0 && (
+                <span
+                  className={`text-xs px-2 py-0.5 rounded-full font-semibold ${
+                    isActive
+                      ? "bg-primary-foreground/20 text-primary-foreground"
+                      : "bg-muted text-muted-foreground"
+                  }`}
+                >
+                  {(projects || []).length}
                 </span>
               )}
               {item.href === "/documents" && contracts.length > 0 && (
