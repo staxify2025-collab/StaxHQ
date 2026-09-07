@@ -16,6 +16,7 @@ import {
   Trash2,
   Plus,
   UserPlus,
+  KeyRound,
   Calendar as CalendarIcon
 } from "lucide-react";
 import { useTenant } from "@/lib/firebase/tenantContext";
@@ -33,6 +34,8 @@ export default function AdminPage() {
     activeOrg, 
     updateOrgSettings, 
     teamMembers, 
+    userPasswords,
+    resetTeamMemberPassword,
     currentRole, 
     resetDemoData, 
     isDemoMode,
@@ -416,7 +419,39 @@ export default function AdminPage() {
                   </div>
                 </div>
 
-                <div className="flex items-center gap-3 self-end sm:self-center">
+                <div className="flex items-center gap-2.5 self-end sm:self-center">
+                  {/* Password status / reset button */}
+                  {userPasswords?.[member.email.toLowerCase()] ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        const newPass = prompt(
+                          `Enter a new temporary password for ${member.displayName} (${member.email}), or leave blank to require setup on their next login:`
+                        );
+                        if (newPass !== null) {
+                          resetTeamMemberPassword(member.email, newPass.trim() || undefined);
+                          alert(
+                            newPass.trim()
+                              ? `Password updated for ${member.displayName}.`
+                              : `Password reset. ${member.displayName} will establish a new password upon next login.`
+                          );
+                        }
+                      }}
+                      className="h-8 text-[11px] gap-1 px-2.5 text-muted-foreground hover:text-foreground"
+                      title="Reset or change password"
+                    >
+                      <KeyRound className="h-3.5 w-3.5 text-indigo-500" />
+                      <span>Reset Pass</span>
+                    </Button>
+                  ) : (
+                    <Badge variant="outline" className="text-[10px] text-amber-500 border-amber-500/30 bg-amber-500/10 gap-1 py-1">
+                      <KeyRound className="h-3 w-3" />
+                      <span>Setup on 1st Login</span>
+                    </Badge>
+                  )}
+
                   {/* Role Selector */}
                   <select
                     value={member.role}

@@ -37,7 +37,7 @@ import { dispatchNotificationWithAlert } from "@/lib/notifications/notificationS
 
 interface TenantContextType {
   isAuthenticated: boolean;
-  login: (email: string, password?: string) => boolean;
+  login: (email: string, password?: string) => { success: boolean; error?: string };
   logout: () => void;
   loginAsDemo: () => void;
   isDemoMode: boolean;
@@ -47,6 +47,8 @@ interface TenantContextType {
   currentRole: UserRole;
   setCurrentRole: (role: UserRole) => void;
   teamMembers: UserProfile[];
+  userPasswords: Record<string, string>;
+  resetTeamMemberPassword: (email: string, newPassword?: string) => void;
   
   // Data
   customers: Customer[];
@@ -120,14 +122,34 @@ interface TenantContextType {
 
 const TenantContext = createContext<TenantContextType | undefined>(undefined);
 
+const defaultSeedPasswords: Record<string, string> = {
+  "admin@staxhq.com": "admin123",
+  "sarah@staxhq.com": "password123",
+  "marcus@staxhq.com": "password123",
+  "admin@staxify.com": "admin123",
+  "marcus@staxify.com": "password123",
+  "jeff@staxifytech.com": "admin123",
+};
+
 export function TenantProvider({ children }: { children: React.ReactNode }) {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(true);
-  const [loggedUserEmail, setLoggedUserEmail] = useState<string>("admin@staxify.com");
+  const [loggedUserEmail, setLoggedUserEmail] = useState<string>("admin@staxhq.com");
   const [isDemoMode, setIsDemoMode] = useState<boolean>(false);
   const [currentRole, setCurrentRole] = useState<UserRole>("admin");
   const [organizations, setOrganizations] = useState<Organization[]>(initialOrganizations);
   const [products, setProducts] = useState<string[]>(appConfig.defaultProducts);
   const [teamMembers, setTeamMembers] = useState<UserProfile[]>(initialTeamMembers);
+  const [userPasswords, setUserPasswords] = useState<Record<string, string>>(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("staxhq_user_passwords");
+      if (saved) {
+        try {
+          return { ...defaultSeedPasswords, ...JSON.parse(saved) };
+        } catch {}
+      }
+    }
+    return defaultSeedPasswords;
+  });
   
   // Scoped Store States
   const [primaryCustomers, setPrimaryCustomers] = useState<Customer[]>([]);
@@ -159,14 +181,56 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
   // Initialize from LocalStorage
   useEffect(() => {
     try {
+      let activeTeam = initialTeamMembers;
+      const savedTeam = localStorage.getItem("staxhq_team_members");
+      if (savedTeam) {
+        try {
+          activeTeam = JSON.parse(savedTeam);
+          setTeamMembers(activeTeam);
+        } catch {
+          setTeamMembers(initialTeamMembers);
+        }
+      } else {
+        setTeamMembers(initialTeamMembers);
+      }
+
+      const savedPasswords = localStorage.getItem("staxhq_user_passwords");
+      if (savedPasswords) {
+        try {
+          setUserPasswords({ ...defaultSeedPasswords, ...JSON.parse(savedPasswords) });
+        } catch {}
+      }
+
       const savedAuth = localStorage.getItem("staxhq_auth_user");
       if (savedAuth) {
         try {
           const parsed = JSON.parse(savedAuth);
-          setIsAuthenticated(true);
-          if (parsed.email) setLoggedUserEmail(parsed.email);
-          if (parsed.role) setCurrentRole(parsed.role);
-        } catch {}
+          if (parsed.isDemo) {
+            setIsAuthenticated(true);
+            setIsDemoMode(true);
+            setLoggedUserEmail("demo@staxify.com");
+            setCurrentRole("admin");
+          } else if (parsed.email) {
+            // Verify that this user is still an authorized team member
+            const member = activeTeam.find(
+              (m) => m.email.toLowerCase() === parsed.email.toLowerCase()
+            );
+            if (member) {
+              setIsAuthenticated(true);
+              setLoggedUserEmail(member.email);
+              setCurrentRole(member.role);
+            } else {
+              // Non-whitelisted session: revoke immediately
+              setIsAuthenticated(false);
+              localStorage.removeItem("staxhq_auth_user");
+            }
+          }
+        } catch {
+          setIsAuthenticated(false);
+          localStorage.removeItem("staxhq_auth_user");
+        }
+      } else {
+        setIsAuthenticated(false);
       }
 
       const savedMode = localStorage.getItem("staxhq_demo_mode");
@@ -180,13 +244,6 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
         setProducts(JSON.parse(savedProducts));
       } else {
         setProducts(appConfig.defaultProducts);
-      }
-
-      const savedTeam = localStorage.getItem("staxhq_team_members");
-      if (savedTeam) {
-        setTeamMembers(JSON.parse(savedTeam));
-      } else {
-        setTeamMembers(initialTeamMembers);
       }
 
       const savedPrimaryCust = localStorage.getItem("staxhq_primary_customers");
@@ -317,27 +374,68 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
     localStorage.setItem("staxhq_user_role", role);
   };
 
-  const login = (email: string, password?: string) => {
+  const login = (email: string, password?: string): { success: boolean; error?: string } => {
     const trimmed = email.trim();
-    if (!trimmed) return false;
+    if (!trimmed) {
+      return { success: false, error: "Please enter your email address." };
+    }
 
+    const normalizedEmail = trimmed.toLowerCase();
+
+    // 1. Strict Team Member Whitelist Verification
     const matched = teamMembers.find(
-      (m) => m.email.toLowerCase() === trimmed.toLowerCase()
+      (m) => m.email.toLowerCase() === normalizedEmail
     );
 
-    const roleToSet: UserRole = matched
-      ? matched.role
-      : (trimmed.toLowerCase().includes("admin") ? "admin" : "employee");
+    if (!matched) {
+      return {
+        success: false,
+        error: `Access Denied: "${trimmed}" is not registered in the Team Members directory. Only authorized StaxHQ personnel can sign in.`,
+      };
+    }
+
+    // 2. Password Verification
+    if (!password || !password.trim()) {
+      return {
+        success: false,
+        error: "Please enter your password.",
+      };
+    }
+
+    const currentSavedPassword = userPasswords[normalizedEmail];
+
+    if (!currentSavedPassword) {
+      // First-time login for newly invited/added team member: establish password
+      if (password.length < 6) {
+        return {
+          success: false,
+          error: "First-time setup: Password must be at least 6 characters.",
+        };
+      }
+      const updatedPasswords = { ...userPasswords, [normalizedEmail]: password };
+      setUserPasswords(updatedPasswords);
+      localStorage.setItem("staxhq_user_passwords", JSON.stringify(updatedPasswords));
+    } else {
+      // Check stored password
+      if (currentSavedPassword !== password) {
+        return {
+          success: false,
+          error: "Incorrect password. Please verify your credentials and try again.",
+        };
+      }
+    }
+
+    const roleToSet: UserRole = matched.role;
 
     setCurrentRole(roleToSet);
-    setLoggedUserEmail(trimmed);
+    setLoggedUserEmail(matched.email);
     setIsAuthenticated(true);
     setIsDemoMode(false);
 
-    localStorage.setItem("staxhq_auth_user", JSON.stringify({ email: trimmed, role: roleToSet }));
+    localStorage.setItem("staxhq_auth_user", JSON.stringify({ email: matched.email, role: roleToSet }));
     localStorage.setItem("staxhq_user_role", roleToSet);
     localStorage.setItem("staxhq_demo_mode", "false");
-    return true;
+    return { success: true };
   };
 
   const logout = () => {
@@ -1044,9 +1142,34 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
   };
 
   const deleteTeamMember = (uid: string) => {
+    const target = teamMembers.find((m) => m.uid === uid);
     const next = teamMembers.filter((m) => m.uid !== uid);
     setTeamMembers(next);
     localStorage.setItem("staxhq_team_members", JSON.stringify(next));
+
+    if (target) {
+      const normalized = target.email.toLowerCase();
+      const updatedPasswords = { ...userPasswords };
+      delete updatedPasswords[normalized];
+      setUserPasswords(updatedPasswords);
+      localStorage.setItem("staxhq_user_passwords", JSON.stringify(updatedPasswords));
+
+      if (loggedUserEmail.toLowerCase() === normalized) {
+        logout();
+      }
+    }
+  };
+
+  const resetTeamMemberPassword = (email: string, newPassword?: string) => {
+    const normalized = email.toLowerCase();
+    const updated = { ...userPasswords };
+    if (newPassword) {
+      updated[normalized] = newPassword;
+    } else {
+      delete updated[normalized];
+    }
+    setUserPasswords(updated);
+    localStorage.setItem("staxhq_user_passwords", JSON.stringify(updated));
   };
 
   // Automated Event Reminder Checker (Runs every 30 seconds)
@@ -1163,6 +1286,8 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
         currentRole,
         setCurrentRole: handleRoleChange,
         teamMembers,
+        userPasswords,
+        resetTeamMemberPassword,
         addTeamMember,
         updateTeamMember,
         deleteTeamMember,

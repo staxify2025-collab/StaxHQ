@@ -1,75 +1,54 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { useRouter } from "next/navigation";
 import { 
   ShieldCheck, 
   Lock, 
   Mail, 
   ArrowRight, 
-  Sparkles, 
-  Users, 
-  Crown, 
-  CheckCircle2,
-  Building2,
-  Layers
+  Eye, 
+  EyeOff, 
+  AlertCircle 
 } from "lucide-react";
 import { useTenant } from "@/lib/firebase/tenantContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
 
 export default function LoginPage() {
   const router = useRouter();
-  const { login, loginAsDemo, isAuthenticated, teamMembers } = useTenant();
+  const { login } = useTenant();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
+
     if (!email.trim()) {
-      setError("Please enter your email address.");
+      setError("Please enter your registered email address.");
+      return;
+    }
+
+    if (!password) {
+      setError("Please enter your account password.");
       return;
     }
 
     setIsLoading(true);
-    const success = login(email, password);
-    if (success) {
+    const result = login(email, password);
+
+    if (result.success) {
       router.push("/dashboard");
     } else {
-      setError("Invalid credentials. Please check your email.");
+      setError(result.error || "Invalid credentials. Please verify your credentials and try again.");
       setIsLoading(false);
     }
-  };
-
-  const handleQuickLogin = (targetEmail: string) => {
-    setIsLoading(true);
-    login(targetEmail);
-    router.push("/dashboard");
-  };
-
-  const handleDemoLogin = () => {
-    setIsLoading(true);
-    loginAsDemo();
-    router.push("/dashboard");
-  };
-
-  // Find sample admin and employee
-  const sampleAdmin = teamMembers.find((m) => m.role === "admin") || {
-    displayName: "Admin Operator",
-    email: "admin@staxify.com",
-    role: "admin",
-  };
-
-  const sampleEmployee = teamMembers.find((m) => m.role === "employee") || {
-    displayName: "Marcus Vance",
-    email: "marcus@staxify.com",
-    role: "employee",
   };
 
   return (
@@ -103,11 +82,12 @@ export default function LoginPage() {
         </div>
 
         {/* Main Login Card */}
-        <div className="rounded-2xl border border-slate-800 bg-slate-900/80 backdrop-blur-xl p-7 shadow-2xl space-y-6">
+        <div className="rounded-2xl border border-slate-800 bg-slate-900/80 backdrop-blur-xl p-7 shadow-2xl space-y-5">
           <form onSubmit={handleSubmit} className="space-y-4">
             {error && (
-              <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs font-medium">
-                {error}
+              <div className="p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs font-medium flex items-start gap-2.5 animate-in fade-in-50">
+                <AlertCircle className="h-4 w-4 text-rose-400 shrink-0 mt-0.5" />
+                <span className="leading-relaxed">{error}</span>
               </div>
             )}
 
@@ -121,10 +101,14 @@ export default function LoginPage() {
                   id="email"
                   type="email"
                   value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  onChange={(e) => {
+                    setEmail(e.target.value);
+                    if (error) setError("");
+                  }}
                   placeholder="name@staxify.com"
                   className="pl-9 bg-slate-950/60 border-slate-800 text-white placeholder:text-slate-600 text-xs h-10 rounded-xl focus:border-indigo-500 focus:ring-indigo-500"
                   required
+                  autoComplete="email"
                 />
               </div>
             </div>
@@ -134,116 +118,53 @@ export default function LoginPage() {
                 <Label htmlFor="password" className="text-xs font-semibold text-slate-300">
                   Password
                 </Label>
-                <span className="text-[11px] text-slate-500">Default: any password</span>
               </div>
               <div className="relative mt-1.5">
                 <Lock className="absolute left-3 top-2.5 h-4 w-4 text-slate-500" />
                 <Input
                   id="password"
-                  type="password"
+                  type={showPassword ? "text" : "password"}
                   value={password}
-                  onChange={(e) => setPassword(e.target.value)}
+                  onChange={(e) => {
+                    setPassword(e.target.value);
+                    if (error) setError("");
+                  }}
                   placeholder="••••••••"
-                  className="pl-9 bg-slate-950/60 border-slate-800 text-white placeholder:text-slate-600 text-xs h-10 rounded-xl focus:border-indigo-500 focus:ring-indigo-500"
+                  className="pl-9 pr-10 bg-slate-950/60 border-slate-800 text-white placeholder:text-slate-600 text-xs h-10 rounded-xl focus:border-indigo-500 focus:ring-indigo-500"
+                  required
+                  autoComplete="current-password"
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-200 transition-colors focus:outline-none p-0.5 rounded"
+                  title={showPassword ? "Hide password" : "Show password"}
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                >
+                  {showPassword ? (
+                    <EyeOff className="h-4 w-4 text-indigo-400" />
+                  ) : (
+                    <Eye className="h-4 w-4 text-slate-400" />
+                  )}
+                </button>
               </div>
             </div>
 
             <Button
               type="submit"
               disabled={isLoading}
-              className="w-full h-10 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white font-semibold text-xs shadow-lg shadow-indigo-500/25 transition-all gap-2"
+              className="w-full h-10 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white font-semibold text-xs shadow-lg shadow-indigo-500/25 transition-all gap-2 mt-2"
             >
               <span>{isLoading ? "Signing In..." : "Sign In to Workspace"}</span>
               <ArrowRight className="h-4 w-4" />
             </Button>
           </form>
-
-          {/* Quick-Access Sign In Pills */}
-          <div className="pt-4 border-t border-slate-800/80 space-y-3">
-            <div className="flex items-center justify-between">
-              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
-                1-Click Quick Access
-              </span>
-              <Badge variant="outline" className="text-[10px] text-slate-400 border-slate-700">
-                Fast Switch
-              </Badge>
-            </div>
-
-            <div className="grid grid-cols-1 gap-2">
-              {/* Admin Button */}
-              <button
-                type="button"
-                onClick={() => handleQuickLogin(sampleAdmin.email)}
-                className="flex items-center justify-between p-2.5 rounded-xl bg-indigo-500/10 hover:bg-indigo-500/20 border border-indigo-500/30 text-left transition-colors group"
-              >
-                <div className="flex items-center gap-2.5">
-                  <div className="h-7 w-7 rounded-lg bg-indigo-600 text-white flex items-center justify-center text-xs font-bold">
-                    <Crown className="h-3.5 w-3.5" />
-                  </div>
-                  <div>
-                    <p className="text-xs font-bold text-slate-200 group-hover:text-white">
-                      Sign In as Admin
-                    </p>
-                    <p className="text-[10px] text-indigo-300 truncate">
-                      {sampleAdmin.email} • Full Access & Financials
-                    </p>
-                  </div>
-                </div>
-                <ArrowRight className="h-3.5 w-3.5 text-indigo-400 group-hover:translate-x-0.5 transition-transform" />
-              </button>
-
-              {/* Employee Button */}
-              <button
-                type="button"
-                onClick={() => handleQuickLogin(sampleEmployee.email)}
-                className="flex items-center justify-between p-2.5 rounded-xl bg-slate-800/60 hover:bg-slate-800 border border-slate-700/60 text-left transition-colors group"
-              >
-                <div className="flex items-center gap-2.5">
-                  <div className="h-7 w-7 rounded-lg bg-slate-700 text-slate-200 flex items-center justify-center text-xs font-bold">
-                    <Users className="h-3.5 w-3.5" />
-                  </div>
-                  <div>
-                    <p className="text-xs font-bold text-slate-200 group-hover:text-white">
-                      Sign In as Employee
-                    </p>
-                    <p className="text-[10px] text-slate-400 truncate">
-                      {sampleEmployee.email} • Operational Access
-                    </p>
-                  </div>
-                </div>
-                <ArrowRight className="h-3.5 w-3.5 text-slate-400 group-hover:translate-x-0.5 transition-transform" />
-              </button>
-
-              {/* Demo Mode Button */}
-              <button
-                type="button"
-                onClick={handleDemoLogin}
-                className="flex items-center justify-between p-2.5 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 text-left transition-colors group"
-              >
-                <div className="flex items-center gap-2.5">
-                  <div className="h-7 w-7 rounded-lg bg-emerald-600 text-white flex items-center justify-center text-xs font-bold">
-                    <Sparkles className="h-3.5 w-3.5" />
-                  </div>
-                  <div>
-                    <p className="text-xs font-bold text-emerald-200 group-hover:text-white">
-                      Launch Client Demo Sandbox
-                    </p>
-                    <p className="text-[10px] text-emerald-300">
-                      Isolated Presentation Mode • Town of Rehobeth
-                    </p>
-                  </div>
-                </div>
-                <ArrowRight className="h-3.5 w-3.5 text-emerald-400 group-hover:translate-x-0.5 transition-transform" />
-              </button>
-            </div>
-          </div>
         </div>
 
         {/* Security Footer */}
         <div className="flex items-center justify-center gap-2 text-[11px] text-slate-500">
           <ShieldCheck className="h-3.5 w-3.5 text-emerald-500" />
-          <span>Encrypted Session • Role-Based Access Control</span>
+          <span>Restricted Access • Authorized Team Members Only</span>
         </div>
       </div>
     </div>
