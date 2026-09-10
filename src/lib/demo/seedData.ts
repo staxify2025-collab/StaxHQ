@@ -32,9 +32,41 @@ export const initialOrganizations: Organization[] = [
 
 export const initialTeamMembers: UserProfile[] = [
   {
+    uid: "user-jeff",
+    displayName: "Jeff",
+    email: "jeff@staxifytech.com",
+    role: "admin",
+    orgId: "stax",
+    createdAt: Date.now() - 90 * 86400000,
+  },
+  {
+    uid: "user-staxify2025",
+    displayName: "Staxify2025",
+    email: "staxify2025@staxifytech.com",
+    role: "admin",
+    orgId: "stax",
+    createdAt: Date.now() - 75 * 86400000,
+  },
+  {
+    uid: "user-staxify2025-alt",
+    displayName: "Staxify2025",
+    email: "staxify2025@staxify.com",
+    role: "admin",
+    orgId: "stax",
+    createdAt: Date.now() - 75 * 86400000,
+  },
+  {
     uid: "user-1",
     displayName: "Admin Operator",
     email: "admin@staxhq.com",
+    role: "admin",
+    orgId: "stax",
+    createdAt: Date.now() - 60 * 86400000,
+  },
+  {
+    uid: "user-admin-staxify",
+    displayName: "Admin Operator",
+    email: "admin@staxify.com",
     role: "admin",
     orgId: "stax",
     createdAt: Date.now() - 60 * 86400000,
