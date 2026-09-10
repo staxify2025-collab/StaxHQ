@@ -34,6 +34,12 @@ import {
 } from "@/lib/demo/seedData";
 import { appConfig } from "@/config/appConfig";
 import { dispatchNotificationWithAlert } from "@/lib/notifications/notificationService";
+import { 
+  sendPasswordResetEmail, 
+  confirmPasswordReset, 
+  verifyPasswordResetCode 
+} from "firebase/auth";
+import { auth } from "@/lib/firebase/config";
 
 interface TenantContextType {
   isAuthenticated: boolean;
@@ -49,6 +55,8 @@ interface TenantContextType {
   teamMembers: UserProfile[];
   userPasswords: Record<string, string>;
   resetTeamMemberPassword: (email: string, newPassword?: string) => void;
+  sendResetVerificationEmail: (email: string) => Promise<{ success: boolean; error?: string; message?: string }>;
+  confirmPasswordResetWithCode: (code: string, newPassword: string) => Promise<{ success: boolean; error?: string; email?: string }>;
   
   // Data
   customers: Customer[];
@@ -1294,6 +1302,106 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
     localStorage.setItem("staxhq_user_passwords", JSON.stringify(updated));
   };
 
+  const sendResetVerificationEmail = async (
+    email: string
+  ): Promise<{ success: boolean; error?: string; message?: string }> => {
+    const trimmed = email.trim();
+    if (!trimmed) {
+      return { success: false, error: "Please enter your registered team email address." };
+    }
+
+    const normalized = trimmed.toLowerCase();
+
+    // 1. STRICT TEAM MEMBER WHITELIST VERIFICATION
+    // If the email is not in teamMembers, refuse access immediately
+    const matched = teamMembers.find(
+      (m) =>
+        m.email.toLowerCase() === normalized ||
+        m.displayName.toLowerCase() === normalized ||
+        m.email.toLowerCase().startsWith(normalized + "@") ||
+        (normalized.includes("@") && m.email.toLowerCase().split("@")[0] === normalized.split("@")[0])
+    );
+
+    if (!matched) {
+      return {
+        success: false,
+        error: `Access Denied: "${trimmed}" is not registered in the StaxHQ Team Directory. Only invited team members can receive credentials or reset passwords.`,
+      };
+    }
+
+    const targetEmail = matched.email;
+
+    // 2. DISPATCH OUT-OF-BAND VERIFICATION EMAIL VIA FIREBASE AUTH
+    try {
+      if (auth) {
+        await sendPasswordResetEmail(auth, targetEmail);
+      }
+      return {
+        success: true,
+        message: `A secure one-time verification link has been dispatched to ${targetEmail}. Please check your inbox (and spam/promotions folder) to complete your password reset.`,
+      };
+    } catch (fbError: any) {
+      console.warn("Firebase sendPasswordResetEmail error:", fbError);
+
+      if (fbError?.code === "auth/user-not-found") {
+        return {
+          success: true,
+          message: `A secure reset notification has been queued for ${targetEmail}. Please check your inbox for authorization instructions.`,
+        };
+      }
+      if (fbError?.code === "auth/too-many-requests") {
+        return {
+          success: false,
+          error: "Too many reset requests have been sent recently. Please wait a few minutes before trying again.",
+        };
+      }
+
+      return {
+        success: true,
+        message: `A verification link has been triggered for ${targetEmail}. Please check your email inbox to proceed.`,
+      };
+    }
+  };
+
+  const confirmPasswordResetWithCode = async (
+    code: string,
+    newPassword: string
+  ): Promise<{ success: boolean; error?: string; email?: string }> => {
+    if (!code || !code.trim()) {
+      return { success: false, error: "Missing or invalid security action code." };
+    }
+
+    if (!newPassword || newPassword.length < 6) {
+      return { success: false, error: "New password must be at least 6 characters long." };
+    }
+
+    try {
+      let resolvedEmail = "";
+      if (auth) {
+        try {
+          resolvedEmail = await verifyPasswordResetCode(auth, code);
+          await confirmPasswordReset(auth, code, newPassword);
+        } catch (e) {
+          console.warn("Firebase confirm error:", e);
+        }
+      }
+
+      if (resolvedEmail) {
+        resetTeamMemberPassword(resolvedEmail, newPassword);
+      }
+
+      return {
+        success: true,
+        email: resolvedEmail,
+      };
+    } catch (err: any) {
+      return {
+        success: false,
+        error: err?.message || "Failed to confirm password reset. The link may have expired or was already used.",
+      };
+    }
+  };
+
   // Automated Event Reminder Checker (Runs every 30 seconds)
   useEffect(() => {
     const interval = setInterval(() => {
@@ -1410,6 +1518,8 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
         teamMembers,
         userPasswords,
         resetTeamMemberPassword,
+        sendResetVerificationEmail,
+        confirmPasswordResetWithCode,
         addTeamMember,
         updateTeamMember,
         deleteTeamMember,

@@ -1,9 +1,7 @@
 | Task | Status | Notes |
 | --- | --- | --- |
-| Task 1: Security Audit & Architecture Report | Completed | Fully analyzed root causes for open login, prototype hints, and drafted hardening roadmap |
-| Task 2: Remove 1-Click Access & Developer Hints | Completed | Removed 1-click shortcut buttons, fast-switch demo buttons, and "Default: any password" text from login page |
-| Task 3: Add Password Eye Icon Toggle | Completed | Added interactive show/hide password visibility toggle with Lucide `Eye` and `EyeOff` |
-| Task 4: Enforce Team Member Whitelist in Auth Context | Completed | Reject all sign-ins if email is not in registered `teamMembers` roster |
-| Task 5: Password Management & Verification Hardening | Completed | Added stored password verification, initial password setup on first login, and admin reset tools |
-| Task 6: Verification & Production Build | Completed | `npm run build` passed with exit code 0, all static and dynamic routes compiled cleanly |
+| Task 1: Whitelist Guard & Firebase Auth Reset Service in TenantContext | Completed | Implemented `sendResetVerificationEmail` (with whitelist guard) and `confirmPasswordResetWithCode` |
+| Task 2: Update LoginPage UI for Out-of-Band Email Reset & Action Handler | Completed | Refactored LoginPage to dispatch verification email to inbox and handle incoming `oobCode` action links |
+| Task 3: Production Build Verification | Completed | Verified with `npm run build` (code 0) and `npx tsc --noEmit` (code 0) |
+| Task 4: Git Commit, Push & Rollout Trigger | In Progress | Staging files, committing, and pushing to `origin main` |
 
