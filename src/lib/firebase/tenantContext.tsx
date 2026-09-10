@@ -40,6 +40,14 @@ import {
   verifyPasswordResetCode 
 } from "firebase/auth";
 import { auth } from "@/lib/firebase/config";
+import { 
+  subscribeToCollection,
+  syncDocument,
+  removeDocument,
+  batchUploadCollection,
+  syncAuthCredentials,
+  subscribeToAuthCredentials,
+} from "@/lib/firebase/firestoreService";
 
 interface TenantContextType {
   isAuthenticated: boolean;
@@ -57,6 +65,8 @@ interface TenantContextType {
   resetTeamMemberPassword: (email: string, newPassword?: string) => void;
   sendResetVerificationEmail: (email: string) => Promise<{ success: boolean; error?: string; message?: string }>;
   confirmPasswordResetWithCode: (code: string, newPassword: string) => Promise<{ success: boolean; error?: string; email?: string }>;
+  cloudSyncStatus: "synced" | "syncing" | "offline" | "error";
+  manualSyncToCloud: () => Promise<{ success: boolean; count: number; error?: string }>;
   
   // Data
   customers: Customer[];
@@ -373,6 +383,245 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
       ? organizations.find((o) => o.id === "demo-org") || initialOrganizations[1]
       : organizations.find((o) => o.id === "stax") || initialOrganizations[0];
   }, [isDemoMode, organizations]);
+
+  const [cloudSyncStatus, setCloudSyncStatus] = useState<"synced" | "syncing" | "offline" | "error">("synced");
+
+  // Real-time Firestore Cloud Database Subscriptions & Automatic Migration
+  useEffect(() => {
+    if (isDemoMode || !activeOrg?.id) return;
+
+    setCloudSyncStatus("syncing");
+
+    // 1. Customers Real-Time Listener & Auto-Migration
+    const unsubCust = subscribeToCollection<Customer>(
+      activeOrg.id,
+      "customers",
+      (items) => {
+        if (items.length > 0) {
+          setPrimaryCustomers(items);
+          localStorage.setItem("staxhq_primary_customers", JSON.stringify(items));
+          setCloudSyncStatus("synced");
+        } else {
+          // If Firestore is empty, auto-upload from localStorage if existing data exists (e.g. from jdnorris profile)
+          const saved = localStorage.getItem("staxhq_primary_customers");
+          if (saved) {
+            try {
+              const localCusts: Customer[] = JSON.parse(saved);
+              if (localCusts.length > 0) {
+                console.log(`[Cloud Sync] Auto-migrating ${localCusts.length} local customers to Firestore...`);
+                setCloudSyncStatus("syncing");
+                batchUploadCollection(activeOrg.id, "customers", localCusts)
+                  .then(() => setCloudSyncStatus("synced"))
+                  .catch((err) => console.warn("Auto-migrate customers warning:", err));
+              } else {
+                setCloudSyncStatus("synced");
+              }
+            } catch {
+              setCloudSyncStatus("synced");
+            }
+          } else {
+            setCloudSyncStatus("synced");
+          }
+        }
+      },
+      () => setCloudSyncStatus("offline")
+    );
+
+    // 2. Contracts
+    const unsubContracts = subscribeToCollection<ContractDocument>(
+      activeOrg.id,
+      "contracts",
+      (items) => {
+        if (items.length > 0) {
+          setPrimaryContracts(items);
+          localStorage.setItem("staxhq_primary_contracts", JSON.stringify(items));
+        } else {
+          const saved = localStorage.getItem("staxhq_primary_contracts");
+          if (saved) {
+            try {
+              const parsed: ContractDocument[] = JSON.parse(saved);
+              if (parsed.length > 0) batchUploadCollection(activeOrg.id, "contracts", parsed);
+            } catch {}
+          }
+        }
+      }
+    );
+
+    // 3. Invoices
+    const unsubInvoices = subscribeToCollection<Invoice>(
+      activeOrg.id,
+      "invoices",
+      (items) => {
+        if (items.length > 0) {
+          setPrimaryInvoices(items);
+          localStorage.setItem("staxhq_primary_invoices", JSON.stringify(items));
+        } else {
+          const saved = localStorage.getItem("staxhq_primary_invoices");
+          if (saved) {
+            try {
+              const parsed: Invoice[] = JSON.parse(saved);
+              if (parsed.length > 0) batchUploadCollection(activeOrg.id, "invoices", parsed);
+            } catch {}
+          }
+        }
+      }
+    );
+
+    // 4. Projects
+    const unsubProjects = subscribeToCollection<ProjectCard>(
+      activeOrg.id,
+      "projects",
+      (items) => {
+        if (items.length > 0) {
+          setPrimaryProjects(items);
+          localStorage.setItem("staxhq_primary_projects", JSON.stringify(items));
+        } else {
+          const saved = localStorage.getItem("staxhq_primary_projects");
+          if (saved) {
+            try {
+              const parsed: ProjectCard[] = JSON.parse(saved);
+              if (parsed.length > 0) batchUploadCollection(activeOrg.id, "projects", parsed);
+            } catch {}
+          }
+        }
+      }
+    );
+
+    // 5. Bank Transactions
+    const unsubBank = subscribeToCollection<BankTransaction>(
+      activeOrg.id,
+      "bankTransactions",
+      (items) => {
+        if (items.length > 0) {
+          setPrimaryBankTransactions(items);
+          localStorage.setItem("staxhq_primary_bank_tx", JSON.stringify(items));
+        } else {
+          const saved = localStorage.getItem("staxhq_primary_bank_tx");
+          if (saved) {
+            try {
+              const parsed: BankTransaction[] = JSON.parse(saved);
+              if (parsed.length > 0) batchUploadCollection(activeOrg.id, "bankTransactions", parsed);
+            } catch {}
+          }
+        }
+      }
+    );
+
+    // 6. Notes
+    const unsubNotes = subscribeToCollection<ActivityNote>(
+      activeOrg.id,
+      "notes",
+      (items) => {
+        if (items.length > 0) {
+          setPrimaryNotes(items);
+          localStorage.setItem("staxhq_primary_notes", JSON.stringify(items));
+        } else {
+          const saved = localStorage.getItem("staxhq_primary_notes");
+          if (saved) {
+            try {
+              const parsed: ActivityNote[] = JSON.parse(saved);
+              if (parsed.length > 0) batchUploadCollection(activeOrg.id, "notes", parsed);
+            } catch {}
+          }
+        }
+      }
+    );
+
+    // 7. Events
+    const unsubEvents = subscribeToCollection<CalendarEvent>(
+      activeOrg.id,
+      "events",
+      (items) => {
+        if (items.length > 0) {
+          setPrimaryEvents(items);
+          localStorage.setItem("staxhq_primary_events", JSON.stringify(items));
+        } else {
+          const saved = localStorage.getItem("staxhq_primary_events");
+          if (saved) {
+            try {
+              const parsed: CalendarEvent[] = JSON.parse(saved);
+              if (parsed.length > 0) batchUploadCollection(activeOrg.id, "events", parsed);
+            } catch {}
+          }
+        }
+      }
+    );
+
+    // 8. Notifications
+    const unsubNotifs = subscribeToCollection<AppNotification>(
+      activeOrg.id,
+      "notifications",
+      (items) => {
+        if (items.length > 0) {
+          setPrimaryNotifications(items);
+          localStorage.setItem("staxhq_primary_notifications", JSON.stringify(items));
+        }
+      }
+    );
+
+    // 9. Team Members
+    const unsubTeam = subscribeToCollection<UserProfile>(
+      activeOrg.id,
+      "teamMembers",
+      (items) => {
+        if (items.length > 0) {
+          const merged = [...items];
+          initialTeamMembers.forEach((initM) => {
+            if (!merged.some((m) => m.email.toLowerCase() === initM.email.toLowerCase())) {
+              merged.push(initM);
+            }
+          });
+          setTeamMembers(merged);
+          localStorage.setItem("staxhq_team_members", JSON.stringify(merged));
+        } else {
+          batchUploadCollection(activeOrg.id, "teamMembers", initialTeamMembers);
+        }
+      }
+    );
+
+    // 10. Auth Credentials Live Sync
+    const unsubAuth = subscribeToAuthCredentials(activeOrg.id, (cloudPasswords) => {
+      if (cloudPasswords && Object.keys(cloudPasswords).length > 0) {
+        setUserPasswords((prev) => {
+          const merged = { ...defaultSeedPasswords, ...prev, ...cloudPasswords };
+          localStorage.setItem("staxhq_user_passwords", JSON.stringify(merged));
+          return merged;
+        });
+      }
+    });
+
+    // 11. Cross-Tab Storage Event Listener
+    const handleStorageEvent = (e: StorageEvent) => {
+      if (e.key === "staxhq_primary_customers" && e.newValue) {
+        try { setPrimaryCustomers(JSON.parse(e.newValue)); } catch {}
+      } else if (e.key === "staxhq_user_passwords" && e.newValue) {
+        try { setUserPasswords(JSON.parse(e.newValue)); } catch {}
+      } else if (e.key === "staxhq_team_members" && e.newValue) {
+        try { setTeamMembers(JSON.parse(e.newValue)); } catch {}
+      } else if (e.key === "staxhq_primary_contracts" && e.newValue) {
+        try { setPrimaryContracts(JSON.parse(e.newValue)); } catch {}
+      } else if (e.key === "staxhq_primary_invoices" && e.newValue) {
+        try { setPrimaryInvoices(JSON.parse(e.newValue)); } catch {}
+      } else if (e.key === "staxhq_primary_projects" && e.newValue) {
+        try { setPrimaryProjects(JSON.parse(e.newValue)); } catch {}
+      }
+    };
+    window.addEventListener("storage", handleStorageEvent);
+
+    return () => {
+      unsubCust();
+      unsubContracts();
+      unsubInvoices();
+      unsubProjects();
+      unsubBank();
+      unsubNotes();
+      unsubEvents();
+      unsubNotifs();
+      unsubTeam();
+      unsubAuth();
+      window.removeEventListener("storage", handleStorageEvent);
+    };
+  }, [isDemoMode, activeOrg?.id]);
 
   const currentUser: UserProfile = useMemo(() => {
     if (isDemoMode) {
@@ -694,6 +943,10 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
     };
     setProjects((prev) => [newProj, ...prev]);
 
+    if (!isDemoMode) {
+      syncDocument(activeOrg.id, "projects", newProj.id, newProj).catch(console.warn);
+    }
+
     sendNotification({
       recipientUserId: "all",
       senderUserId: currentUser.uid,
@@ -709,18 +962,28 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
 
   const updateProject = (id: string, updates: Partial<ProjectCard>) => {
     setProjects((prev) =>
-      prev.map((p) => (p.id === id ? { ...p, ...updates, updatedAt: Date.now() } : p))
+      prev.map((p) => {
+        if (p.id === id) {
+          const updated = { ...p, ...updates, updatedAt: Date.now() };
+          if (!isDemoMode) {
+            syncDocument(activeOrg.id, "projects", id, updated).catch(console.warn);
+          }
+          return updated;
+        }
+        return p;
+      })
     );
   };
 
   const deleteProject = (id: string) => {
     setProjects((prev) => prev.filter((p) => p.id !== id));
+    if (!isDemoMode) {
+      removeDocument(activeOrg.id, "projects", id).catch(console.warn);
+    }
   };
 
   const moveProjectStage = (id: string, newStage: ProjectStage) => {
-    setProjects((prev) =>
-      prev.map((p) => (p.id === id ? { ...p, stage: newStage, updatedAt: Date.now() } : p))
-    );
+    updateProject(id, { stage: newStage });
   };
 
   const addProjectNote = (projectId: string, content: string, authorName?: string) => {
@@ -731,15 +994,20 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
       createdAt: Date.now(),
     };
     setProjects((prev) =>
-      prev.map((p) =>
-        p.id === projectId
-          ? {
-              ...p,
-              notes: [newNoteItem, ...(p.notes || [])],
-              updatedAt: Date.now(),
-            }
-          : p
-      )
+      prev.map((p) => {
+        if (p.id === projectId) {
+          const updated = {
+            ...p,
+            notes: [newNoteItem, ...(p.notes || [])],
+            updatedAt: Date.now(),
+          };
+          if (!isDemoMode) {
+            syncDocument(activeOrg.id, "projects", projectId, updated).catch(console.warn);
+          }
+          return updated;
+        }
+        return p;
+      })
     );
   };
 
@@ -756,12 +1024,16 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
             ? Math.round((completedCount / updatedTasks.length) * 100)
             : p.progressPercentage || 0;
 
-        return {
+        const updated = {
           ...p,
           tasks: updatedTasks,
           progressPercentage,
           updatedAt: Date.now(),
         };
+        if (!isDemoMode) {
+          syncDocument(activeOrg.id, "projects", projectId, updated).catch(console.warn);
+        }
+        return updated;
       })
     );
   };
@@ -775,6 +1047,9 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
       updatedAt: Date.now(),
     }));
     setProjects((prev) => [...formatted, ...prev]);
+    if (!isDemoMode) {
+      batchUploadCollection(activeOrg.id, "projects", formatted).catch(console.warn);
+    }
   };
 
   // Bank Transactions
@@ -803,25 +1078,46 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
       importedAt: Date.now(),
     };
     setBankTransactions((prev) => [newTx, ...prev]);
+    if (!isDemoMode) {
+      syncDocument(activeOrg.id, "bankTransactions", newTx.id, newTx).catch(console.warn);
+    }
     return newTx;
   };
 
   const updateBankTransaction = (id: string, updates: Partial<BankTransaction>) => {
     setBankTransactions((prev) =>
-      prev.map((tx) => (tx.id === id ? { ...tx, ...updates } : tx))
+      prev.map((tx) => {
+        if (tx.id === id) {
+          const updated = { ...tx, ...updates };
+          if (!isDemoMode) {
+            syncDocument(activeOrg.id, "bankTransactions", id, updated).catch(console.warn);
+          }
+          return updated;
+        }
+        return tx;
+      })
     );
   };
 
   const deleteBankTransaction = (id: string) => {
     setBankTransactions((prev) => prev.filter((tx) => tx.id !== id));
+    if (!isDemoMode) {
+      removeDocument(activeOrg.id, "bankTransactions", id).catch(console.warn);
+    }
   };
 
   const importBankTransactions = (newTxs: BankTransaction[]) => {
     setBankTransactions((prev) => [...newTxs, ...prev]);
+    if (!isDemoMode) {
+      batchUploadCollection(activeOrg.id, "bankTransactions", newTxs).catch(console.warn);
+    }
   };
 
   const overwriteBankTransactions = (txs: BankTransaction[]) => {
     setBankTransactions(txs);
+    if (!isDemoMode) {
+      batchUploadCollection(activeOrg.id, "bankTransactions", txs).catch(console.warn);
+    }
   };
 
   const clearBankTransactions = () => {
@@ -842,17 +1138,32 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
       updatedAt: Date.now(),
     };
     setCustomers((prev) => [newCust, ...prev]);
+    if (!isDemoMode) {
+      syncDocument(activeOrg.id, "customers", newCust.id, newCust).catch(console.warn);
+    }
     return newCust;
   };
 
   const updateCustomer = (id: string, updates: Partial<Customer>) => {
     setCustomers((prev) =>
-      prev.map((c) => (c.id === id ? { ...c, ...updates, updatedAt: Date.now() } : c))
+      prev.map((c) => {
+        if (c.id === id) {
+          const updated = { ...c, ...updates, updatedAt: Date.now() };
+          if (!isDemoMode) {
+            syncDocument(activeOrg.id, "customers", id, updated).catch(console.warn);
+          }
+          return updated;
+        }
+        return c;
+      })
     );
   };
 
   const deleteCustomer = (id: string) => {
     setCustomers((prev) => prev.filter((c) => c.id !== id));
+    if (!isDemoMode) {
+      removeDocument(activeOrg.id, "customers", id).catch(console.warn);
+    }
   };
 
   // Notification Actions
@@ -865,22 +1176,41 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
       createdAt: Date.now(),
     };
     setNotifications((prev) => [newNotif, ...prev]);
+    if (!isDemoMode) {
+      syncDocument(activeOrg.id, "notifications", newNotif.id, newNotif).catch(console.warn);
+    }
     dispatchNotificationWithAlert(newNotif, true);
     return newNotif;
   };
 
   const markNotificationRead = (id: string) => {
     setNotifications((prev) =>
-      prev.map((n) => (n.id === id ? { ...n, read: true } : n))
+      prev.map((n) => {
+        if (n.id === id) {
+          const updated = { ...n, read: true };
+          if (!isDemoMode) syncDocument(activeOrg.id, "notifications", id, updated).catch(console.warn);
+          return updated;
+        }
+        return n;
+      })
     );
   };
 
   const markAllNotificationsRead = () => {
-    setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+    setNotifications((prev) =>
+      prev.map((n) => {
+        const updated = { ...n, read: true };
+        if (!isDemoMode) syncDocument(activeOrg.id, "notifications", n.id, updated).catch(console.warn);
+        return updated;
+      })
+    );
   };
 
   const deleteNotification = (id: string) => {
     setNotifications((prev) => prev.filter((n) => n.id !== id));
+    if (!isDemoMode) {
+      removeDocument(activeOrg.id, "notifications", id).catch(console.warn);
+    }
   };
 
   const clearAllNotifications = () => {
@@ -897,6 +1227,9 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
       updatedAt: Date.now(),
     };
     setContracts((prev) => [newDoc, ...prev]);
+    if (!isDemoMode) {
+      syncDocument(activeOrg.id, "contracts", newDoc.id, newDoc).catch(console.warn);
+    }
 
     // If new contract is sent for signature, notify team
     if (newDoc.status === "sent_for_signature") {
@@ -922,6 +1255,9 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
       prev.map((d) => {
         if (d.id === id) {
           const updated = { ...d, ...updates, updatedAt: Date.now() };
+          if (!isDemoMode) {
+            syncDocument(activeOrg.id, "contracts", id, updated).catch(console.warn);
+          }
 
           // Trigger notification on digital signing
           if (updates.status === "signed" && d.status !== "signed") {
@@ -949,6 +1285,9 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
 
   const deleteContract = (id: string) => {
     setContracts((prev) => prev.filter((d) => d.id !== id));
+    if (!isDemoMode) {
+      removeDocument(activeOrg.id, "contracts", id).catch(console.warn);
+    }
   };
 
   // Template Actions
@@ -963,11 +1302,21 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
     const next = [newTpl, ...templates];
     setTemplates(next);
     localStorage.setItem("staxhq_contract_templates", JSON.stringify(next));
+    if (!isDemoMode) {
+      syncDocument(activeOrg.id, "contractTemplates", newTpl.id, newTpl).catch(console.warn);
+    }
     return newTpl;
   };
 
   const updateTemplate = (id: string, updates: Partial<ContractTemplate>) => {
-    const next = templates.map((t) => (t.id === id ? { ...t, ...updates, updatedAt: Date.now() } : t));
+    const next = templates.map((t) => {
+      if (t.id === id) {
+        const updated = { ...t, ...updates, updatedAt: Date.now() };
+        if (!isDemoMode) syncDocument(activeOrg.id, "contractTemplates", id, updated).catch(console.warn);
+        return updated;
+      }
+      return t;
+    });
     setTemplates(next);
     localStorage.setItem("staxhq_contract_templates", JSON.stringify(next));
   };
@@ -976,6 +1325,9 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
     const next = templates.filter((t) => t.id !== id);
     setTemplates(next);
     localStorage.setItem("staxhq_contract_templates", JSON.stringify(next));
+    if (!isDemoMode) {
+      removeDocument(activeOrg.id, "contractTemplates", id).catch(console.warn);
+    }
   };
 
   // Invoice Actions
@@ -988,17 +1340,32 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
       updatedAt: Date.now(),
     };
     setInvoices((prev) => [newInv, ...prev]);
+    if (!isDemoMode) {
+      syncDocument(activeOrg.id, "invoices", newInv.id, newInv).catch(console.warn);
+    }
     return newInv;
   };
 
   const updateInvoice = (id: string, updates: Partial<Invoice>) => {
     setInvoices((prev) =>
-      prev.map((i) => (i.id === id ? { ...i, ...updates, updatedAt: Date.now() } : i))
+      prev.map((i) => {
+        if (i.id === id) {
+          const updated = { ...i, ...updates, updatedAt: Date.now() };
+          if (!isDemoMode) {
+            syncDocument(activeOrg.id, "invoices", id, updated).catch(console.warn);
+          }
+          return updated;
+        }
+        return i;
+      })
     );
   };
 
   const deleteInvoice = (id: string) => {
     setInvoices((prev) => prev.filter((i) => i.id !== id));
+    if (!isDemoMode) {
+      removeDocument(activeOrg.id, "invoices", id).catch(console.warn);
+    }
   };
 
   const generateRenewalInvoice = (customerId: string): Invoice | null => {
@@ -1056,6 +1423,9 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
     };
 
     setInvoices((prev) => [newInvoice, ...prev]);
+    if (!isDemoMode) {
+      syncDocument(activeOrg.id, "invoices", newInvoice.id, newInvoice).catch(console.warn);
+    }
 
     // Dispatch admin notification
     sendNotification({
@@ -1081,6 +1451,9 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
       createdAt: Date.now(),
     };
     setNotes((prev) => [newNote, ...prev]);
+    if (!isDemoMode) {
+      syncDocument(activeOrg.id, "notes", newNote.id, newNote).catch(console.warn);
+    }
 
     // Auto-dispatch notifications if note mentions team members or is urgent
     if (newNote.taggedUserIds && newNote.taggedUserIds.length > 0) {
@@ -1117,6 +1490,9 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
 
   const deleteNote = (id: string) => {
     setNotes((prev) => prev.filter((n) => n.id !== id));
+    if (!isDemoMode) {
+      removeDocument(activeOrg.id, "notes", id).catch(console.warn);
+    }
   };
 
   // Event Actions
@@ -1128,17 +1504,30 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
       createdAt: Date.now(),
     };
     setEvents((prev) => [newEvent, ...prev]);
+    if (!isDemoMode) {
+      syncDocument(activeOrg.id, "events", newEvent.id, newEvent).catch(console.warn);
+    }
     return newEvent;
   };
 
   const updateEvent = (id: string, updates: Partial<CalendarEvent>) => {
     setEvents((prev) =>
-      prev.map((e) => (e.id === id ? { ...e, ...updates } : e))
+      prev.map((e) => {
+        if (e.id === id) {
+          const updated = { ...e, ...updates };
+          if (!isDemoMode) syncDocument(activeOrg.id, "events", id, updated).catch(console.warn);
+          return updated;
+        }
+        return e;
+      })
     );
   };
 
   const deleteEvent = (id: string) => {
     setEvents((prev) => prev.filter((e) => e.id !== id));
+    if (!isDemoMode) {
+      removeDocument(activeOrg.id, "events", id).catch(console.warn);
+    }
   };
 
   const updateOrgSettings = (updates: Partial<Organization>) => {
@@ -1211,6 +1600,16 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
     localStorage.setItem("staxhq_primary_notes", JSON.stringify(nts));
     localStorage.setItem("staxhq_primary_events", JSON.stringify(evts));
     localStorage.setItem("staxhq_primary_notifications", JSON.stringify(notifs));
+
+    if (!isDemoMode) {
+      batchUploadCollection(activeOrg.id, "customers", custs).catch(console.warn);
+      batchUploadCollection(activeOrg.id, "contracts", docs).catch(console.warn);
+      batchUploadCollection(activeOrg.id, "invoices", invs).catch(console.warn);
+      batchUploadCollection(activeOrg.id, "projects", initialProjects).catch(console.warn);
+      batchUploadCollection(activeOrg.id, "bankTransactions", initialBankTransactions).catch(console.warn);
+      batchUploadCollection(activeOrg.id, "notes", nts).catch(console.warn);
+      batchUploadCollection(activeOrg.id, "events", evts).catch(console.warn);
+    }
   };
 
   const addProduct = (productName: string) => {
@@ -1237,11 +1636,21 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
     const next = [...teamMembers, newMember];
     setTeamMembers(next);
     localStorage.setItem("staxhq_team_members", JSON.stringify(next));
+    if (!isDemoMode) {
+      syncDocument(activeOrg.id, "teamMembers", newMember.uid, newMember).catch(console.warn);
+    }
     return newMember;
   };
 
   const updateTeamMember = (uid: string, updates: Partial<UserProfile>) => {
-    const next = teamMembers.map((m) => (m.uid === uid ? { ...m, ...updates } : m));
+    const next = teamMembers.map((m) => {
+      if (m.uid === uid) {
+        const updated = { ...m, ...updates };
+        if (!isDemoMode) syncDocument(activeOrg.id, "teamMembers", uid, updated).catch(console.warn);
+        return updated;
+      }
+      return m;
+    });
     setTeamMembers(next);
     localStorage.setItem("staxhq_team_members", JSON.stringify(next));
   };
@@ -1251,6 +1660,9 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
     const next = teamMembers.filter((m) => m.uid !== uid);
     setTeamMembers(next);
     localStorage.setItem("staxhq_team_members", JSON.stringify(next));
+    if (!isDemoMode) {
+      removeDocument(activeOrg.id, "teamMembers", uid).catch(console.warn);
+    }
 
     if (target) {
       const normalized = target.email.toLowerCase();
@@ -1258,6 +1670,9 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
       delete updatedPasswords[normalized];
       setUserPasswords(updatedPasswords);
       localStorage.setItem("staxhq_user_passwords", JSON.stringify(updatedPasswords));
+      if (!isDemoMode) {
+        syncAuthCredentials(activeOrg.id, updatedPasswords).catch(console.warn);
+      }
 
       if (loggedUserEmail.toLowerCase() === normalized) {
         logout();
@@ -1295,6 +1710,9 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
       const nextTeam = [...teamMembers, matched];
       setTeamMembers(nextTeam);
       localStorage.setItem("staxhq_team_members", JSON.stringify(nextTeam));
+      if (!isDemoMode) {
+        syncDocument(activeOrg.id, "teamMembers", matched.uid, matched).catch(console.warn);
+      }
     }
 
     const targetEmail = matched ? matched.email.toLowerCase() : normalized;
@@ -1311,6 +1729,33 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
     }
     setUserPasswords(updated);
     localStorage.setItem("staxhq_user_passwords", JSON.stringify(updated));
+    if (!isDemoMode) {
+      syncAuthCredentials(activeOrg.id, updated).catch(console.warn);
+    }
+  };
+
+  const manualSyncToCloud = async (): Promise<{ success: boolean; count: number; error?: string }> => {
+    setCloudSyncStatus("syncing");
+    try {
+      const orgId = activeOrg.id || "stax";
+      const results = await Promise.all([
+        batchUploadCollection(orgId, "customers", primaryCustomers),
+        batchUploadCollection(orgId, "contracts", primaryContracts),
+        batchUploadCollection(orgId, "invoices", primaryInvoices),
+        batchUploadCollection(orgId, "projects", primaryProjects),
+        batchUploadCollection(orgId, "bankTransactions", primaryBankTransactions),
+        batchUploadCollection(orgId, "notes", primaryNotes),
+        batchUploadCollection(orgId, "events", primaryEvents),
+        batchUploadCollection(orgId, "teamMembers", teamMembers),
+        syncAuthCredentials(orgId, userPasswords),
+      ]);
+      const totalUploaded = results.reduce<number>((sum, count) => (typeof count === "number" ? sum + count : sum), 0);
+      setCloudSyncStatus("synced");
+      return { success: true, count: totalUploaded };
+    } catch (err: any) {
+      setCloudSyncStatus("error");
+      return { success: false, count: 0, error: err?.message || "Cloud sync failed" };
+    }
   };
 
   const sendResetVerificationEmail = async (
@@ -1531,6 +1976,8 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
         resetTeamMemberPassword,
         sendResetVerificationEmail,
         confirmPasswordResetWithCode,
+        cloudSyncStatus,
+        manualSyncToCloud,
         addTeamMember,
         updateTeamMember,
         deleteTeamMember,

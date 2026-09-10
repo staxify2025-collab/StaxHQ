@@ -17,7 +17,9 @@ import {
   Plus,
   UserPlus,
   KeyRound,
-  Calendar as CalendarIcon
+  Calendar as CalendarIcon,
+  Cloud,
+  CloudOff
 } from "lucide-react";
 import { useTenant } from "@/lib/firebase/tenantContext";
 import { Button } from "@/components/ui/button";
@@ -47,6 +49,11 @@ export default function AdminPage() {
     updateTeamMember,
     deleteTeamMember,
     customers,
+    contracts,
+    invoices,
+    projects,
+    cloudSyncStatus,
+    manualSyncToCloud,
     clearAllPrimaryData,
     seedSamplePrimaryData
   } = useTenant();
@@ -63,6 +70,7 @@ export default function AdminPage() {
   const [newMemberEmail, setNewMemberEmail] = useState("");
   const [newMemberRole, setNewMemberRole] = useState<UserRole>("employee");
   const [isSaved, setIsSaved] = useState(false);
+  const [isSyncingCloud, setIsSyncingCloud] = useState(false);
 
   if (currentRole === "employee") {
     return (
@@ -549,6 +557,92 @@ export default function AdminPage() {
                 <span>Save Calendar Integration Settings</span>
               </Button>
             </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Cloud Database & Multi-Device Real-Time Sync Card */}
+      <Card className="border-indigo-500/30 bg-indigo-500/5">
+        <CardHeader className="p-6 pb-4 border-b border-indigo-500/20">
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-base font-bold text-foreground flex items-center gap-2">
+              <Cloud className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />
+              <span>Google Cloud Database & Multi-Browser Sync</span>
+            </CardTitle>
+            {cloudSyncStatus === "synced" && (
+              <Badge variant="success" className="gap-1 text-[11px] py-0.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                Live Cloud Synced
+              </Badge>
+            )}
+            {cloudSyncStatus === "syncing" && (
+              <Badge variant="outline" className="gap-1 text-[11px] py-0.5 text-sky-400 border-sky-500/30">
+                <RefreshCw className="w-3 h-3 animate-spin" />
+                Syncing...
+              </Badge>
+            )}
+            {(cloudSyncStatus === "offline" || cloudSyncStatus === "error") && (
+              <Badge variant="outline" className="gap-1 text-[11px] py-0.5 text-amber-500 border-amber-500/30">
+                <CloudOff className="w-3 h-3" />
+                Local Cache Mode
+              </Badge>
+            )}
+          </div>
+          <CardDescription className="text-xs">
+            StaxHQ connects directly to Google Cloud Firestore (<code>staxhq-74672</code>). All records update automatically in real time across all browsers, laptops, and team member accounts.
+          </CardDescription>
+        </CardHeader>
+
+        <CardContent className="p-6 space-y-4">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div className="p-3 rounded-xl bg-card border border-border/80">
+              <p className="text-[11px] text-muted-foreground font-medium">Customers</p>
+              <p className="text-lg font-bold text-foreground mt-0.5">{customers.length}</p>
+            </div>
+            <div className="p-3 rounded-xl bg-card border border-border/80">
+              <p className="text-[11px] text-muted-foreground font-medium">Contracts</p>
+              <p className="text-lg font-bold text-foreground mt-0.5">{contracts.length}</p>
+            </div>
+            <div className="p-3 rounded-xl bg-card border border-border/80">
+              <p className="text-[11px] text-muted-foreground font-medium">Invoices</p>
+              <p className="text-lg font-bold text-foreground mt-0.5">{invoices.length}</p>
+            </div>
+            <div className="p-3 rounded-xl bg-card border border-border/80">
+              <p className="text-[11px] text-muted-foreground font-medium">Projects</p>
+              <p className="text-lg font-bold text-foreground mt-0.5">{projects.length}</p>
+            </div>
+          </div>
+
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2 border-t border-border/60">
+            <div>
+              <p className="text-xs font-semibold text-foreground">
+                Sync Local Browser Data to Cloud
+              </p>
+              <p className="text-[11px] text-muted-foreground mt-0.5">
+                Uploads any customer or financial data from this browser profile directly into Google Cloud Firestore.
+              </p>
+            </div>
+
+            <Button
+              type="button"
+              variant="gradient"
+              size="sm"
+              disabled={isSyncingCloud}
+              onClick={async () => {
+                setIsSyncingCloud(true);
+                const res = await manualSyncToCloud();
+                setIsSyncingCloud(false);
+                if (res.success) {
+                  alert(`✓ Cloud Synchronization Complete! ${res.count} records successfully synced to Google Cloud Firestore.`);
+                } else {
+                  alert(`Sync warning: ${res.error || "Unable to sync"}`);
+                }
+              }}
+              className="gap-2 text-xs shrink-0"
+            >
+              <Cloud className="h-3.5 w-3.5" />
+              <span>{isSyncingCloud ? "Syncing to Cloud..." : "Push Local Data to Cloud"}</span>
+            </Button>
           </div>
         </CardContent>
       </Card>

@@ -10,7 +10,10 @@ import {
   Layers, 
   ArrowLeftRight,
   Eye,
-  CheckCircle2
+  CheckCircle2,
+  Cloud,
+  CloudOff,
+  RefreshCw
 } from "lucide-react";
 import { useTenant } from "@/lib/firebase/tenantContext";
 import { Button } from "@/components/ui/button";
@@ -30,7 +33,8 @@ export function TopHeader({ onNewCustomerClick, onNewDocumentClick }: TopHeaderP
     activeOrg, 
     currentRole, 
     setCurrentRole,
-    resetDemoData 
+    resetDemoData,
+    cloudSyncStatus
   } = useTenant();
 
   const [roleMenuOpen, setRoleMenuOpen] = useState(false);
@@ -50,9 +54,38 @@ export function TopHeader({ onNewCustomerClick, onNewDocumentClick }: TopHeaderP
               Demo Environment
             </Badge>
           ) : (
-            <Badge variant="outline" className="text-[11px] py-0.5 text-muted-foreground">
-              Production Company
-            </Badge>
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className="text-[11px] py-0.5 text-muted-foreground">
+                Production
+              </Badge>
+              {cloudSyncStatus === "synced" && (
+                <div 
+                  className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20"
+                  title="Real-time cloud synchronization active (Google Cloud Firestore)"
+                >
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                  <span>Cloud Synced</span>
+                </div>
+              )}
+              {cloudSyncStatus === "syncing" && (
+                <div 
+                  className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-500/20"
+                  title="Synchronizing with cloud database..."
+                >
+                  <RefreshCw className="w-2.5 h-2.5 animate-spin" />
+                  <span>Syncing...</span>
+                </div>
+              )}
+              {(cloudSyncStatus === "offline" || cloudSyncStatus === "error") && (
+                <div 
+                  className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20"
+                  title="Operating in local cache mode"
+                >
+                  <CloudOff className="w-2.5 h-2.5" />
+                  <span>Local Mode</span>
+                </div>
+              )}
+            </div>
           )}
         </div>
       </div>
