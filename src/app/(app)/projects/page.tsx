@@ -7,6 +7,7 @@ import {
   ProjectPriority 
 } from "@/types/crm";
 import { useTenant } from "@/lib/firebase/tenantContext";
+import { initialProjects } from "@/lib/demo/seedData";
 import { ProjectKanbanBoard } from "@/components/projects/ProjectKanbanBoard";
 import { ProjectTableView } from "@/components/projects/ProjectTableView";
 import { ProjectCreatorModal } from "@/components/projects/ProjectCreatorModal";
@@ -36,6 +37,7 @@ export default function ProjectsPage() {
     projects, 
     moveProjectStage, 
     deleteProject, 
+    importProjects,
     customers,
     activeOrg 
   } = useTenant();
@@ -119,6 +121,18 @@ export default function ProjectsPage() {
 
         {/* Header Action Buttons */}
         <div className="flex items-center gap-2.5 flex-wrap">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => importProjects(initialProjects)}
+            className="text-xs font-bold gap-1.5 border-indigo-500/40 text-indigo-400 hover:bg-indigo-500/10 shadow-xs"
+            title="Reload all 8 default Staxify projects"
+          >
+            <RefreshCw className="h-3.5 w-3.5" />
+            <span>Reload 8 Projects</span>
+          </Button>
+
           <Button
             type="button"
             variant="outline"
@@ -306,6 +320,33 @@ export default function ProjectsPage() {
           )}
         </div>
       </div>
+
+      {/* Empty State Quick Restoration Banner */}
+      {totalCount === 0 && (
+        <div className="p-4.5 rounded-2xl bg-indigo-500/10 border border-indigo-500/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 animate-in fade-in-50">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 rounded-xl bg-indigo-500/20 text-indigo-400 shrink-0">
+              <Sparkles className="h-5 w-5" />
+            </div>
+            <div>
+              <p className="text-sm font-bold text-foreground">
+                Projects Board is Empty
+              </p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Click below to instantly restore all 8 core engineering initiatives (GovStax, SPANLINK, RESTORE PRO, STAX ECHO, etc.) into your workspace.
+              </p>
+            </div>
+          </div>
+          <Button
+            type="button"
+            onClick={() => importProjects(initialProjects)}
+            className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-semibold text-xs gap-1.5 shadow-md shadow-indigo-500/20 shrink-0"
+          >
+            <Sparkles className="h-3.5 w-3.5" />
+            <span>Restore All 8 Projects</span>
+          </Button>
+        </div>
+      )}
 
       {/* Main Board or Table Rendering */}
       {viewMode === "kanban" ? (

@@ -184,7 +184,7 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
   const [primaryInvoices, setPrimaryInvoices] = useState<Invoice[]>([]);
   const [demoInvoicesState, setDemoInvoicesState] = useState<Invoice[]>(demoInvoices);
 
-  const [primaryProjects, setPrimaryProjects] = useState<ProjectCard[]>([]);
+  const [primaryProjects, setPrimaryProjects] = useState<ProjectCard[]>(initialProjects);
   const [demoProjectsState, setDemoProjectsState] = useState<ProjectCard[]>(demoProjects);
 
   const [primaryBankTransactions, setPrimaryBankTransactions] = useState<BankTransaction[]>([]);
@@ -323,10 +323,21 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
 
       const savedPrimaryProj = localStorage.getItem("staxhq_primary_projects");
       if (savedPrimaryProj) {
-        setPrimaryProjects(JSON.parse(savedPrimaryProj));
+        try {
+          const parsed = JSON.parse(savedPrimaryProj);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setPrimaryProjects(parsed);
+          } else {
+            setPrimaryProjects(initialProjects);
+            localStorage.setItem("staxhq_primary_projects", JSON.stringify(initialProjects));
+          }
+        } catch {
+          setPrimaryProjects(initialProjects);
+          localStorage.setItem("staxhq_primary_projects", JSON.stringify(initialProjects));
+        }
       } else {
-        setPrimaryProjects([]);
-        localStorage.setItem("staxhq_primary_projects", JSON.stringify([]));
+        setPrimaryProjects(initialProjects);
+        localStorage.setItem("staxhq_primary_projects", JSON.stringify(initialProjects));
       }
 
       const savedDemoProj = localStorage.getItem("staxhq_demo_projects");
