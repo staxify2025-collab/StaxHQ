@@ -497,7 +497,9 @@ export default function FinancialsPage() {
                           </p>
                         </div>
                         <Badge variant="outline" className="text-[10px] font-bold">
-                          Day {fin?.renewalDayOfMonth || 15}
+                          {fin?.nextRenewalDate
+                            ? `Renews ${new Date(fin.nextRenewalDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`
+                            : `Day ${fin?.renewalDayOfMonth || 15}`}
                         </Badge>
                       </CardHeader>
                       <CardContent className="p-4 pt-1 space-y-3">
@@ -509,6 +511,14 @@ export default function FinancialsPage() {
                         </div>
 
                         <div className="p-2.5 rounded-lg bg-muted/40 border border-border/60 text-[11px] space-y-1">
+                          <div className="flex items-center justify-between text-muted-foreground">
+                            <span>Next Renewal:</span>
+                            <strong className="text-foreground">
+                              {fin?.nextRenewalDate
+                                ? new Date(fin.nextRenewalDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+                                : `Day ${fin?.renewalDayOfMonth || 15} of cycle`}
+                            </strong>
+                          </div>
                           <div className="flex items-center justify-between text-muted-foreground">
                             <span>Notice Trigger:</span>
                             <strong className="text-foreground">{noticeDays} days prior</strong>

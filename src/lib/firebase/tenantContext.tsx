@@ -1427,12 +1427,40 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
       syncDocument(activeOrg.id, "invoices", newInvoice.id, newInvoice).catch(console.warn);
     }
 
+    // Auto-advance customer's nextRenewalDate to the next billing cycle (+1 yr for annual, +1 mo for monthly, +3 mo for quarterly)
+    const baseDate = fin.nextRenewalDate ? new Date(fin.nextRenewalDate) : new Date();
+    const nextDate = new Date(baseDate);
+    if (cycle === "monthly") {
+      nextDate.setMonth(nextDate.getMonth() + 1);
+      while (nextDate.getTime() < Date.now()) {
+        nextDate.setMonth(nextDate.getMonth() + 1);
+      }
+    } else if (cycle === "quarterly") {
+      nextDate.setMonth(nextDate.getMonth() + 3);
+      while (nextDate.getTime() < Date.now()) {
+        nextDate.setMonth(nextDate.getMonth() + 3);
+      }
+    } else {
+      nextDate.setFullYear(nextDate.getFullYear() + 1);
+      while (nextDate.getTime() < Date.now()) {
+        nextDate.setFullYear(nextDate.getFullYear() + 1);
+      }
+    }
+    const updatedRenewalDate = nextDate.getTime();
+
+    updateCustomer(cust.id, {
+      financials: {
+        ...fin,
+        nextRenewalDate: updatedRenewalDate,
+      },
+    });
+
     // Dispatch admin notification
     sendNotification({
       recipientUserId: "all",
       type: "invoice_created",
       title: `⚠️ Review Draft Invoice: ${cust.name}`,
-      messageSnippet: `Draft ${invNum} for $${roundedSubtotal.toLocaleString(undefined, { minimumFractionDigits: 2 })} has been created and is awaiting admin review.`,
+      messageSnippet: `Draft ${invNum} for $${roundedSubtotal.toLocaleString(undefined, { minimumFractionDigits: 2 })} has been created and is awaiting admin review. Next renewal auto-scheduled for ${new Date(updatedRenewalDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}.`,
       targetUrl: "/financials",
       customerId: cust.id,
       customerName: cust.name,
