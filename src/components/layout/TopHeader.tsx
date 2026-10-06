@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
+import Link from "next/link";
 import { 
   Sparkles, 
   Shield, 
@@ -13,7 +14,8 @@ import {
   CheckCircle2,
   Cloud,
   CloudOff,
-  RefreshCw
+  RefreshCw,
+  Printer
 } from "lucide-react";
 import { useTenant } from "@/lib/firebase/tenantContext";
 import { Button } from "@/components/ui/button";
@@ -87,6 +89,16 @@ export function TopHeader({ onNewCustomerClick, onNewDocumentClick }: TopHeaderP
               )}
             </div>
           )}
+
+          {/* Flyer Quick Access Button */}
+          <Link
+            href="/flyer"
+            className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-600 dark:text-indigo-400 border border-indigo-500/30 transition-all shadow-xs active:scale-95 ml-1"
+            title="View & Print Staxify Business Cardstock Flyer"
+          >
+            <Printer className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+            <span>Flyer</span>
+          </Link>
         </div>
       </div>
 
