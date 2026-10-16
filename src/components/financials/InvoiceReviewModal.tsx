@@ -129,15 +129,22 @@ export function InvoiceReviewModal({
   };
 
   const handleSendGmail = () => {
-    handleSaveInvoice();
+    const updatedDue = dueDateStr ? new Date(dueDateStr).getTime() : invoice.dueDate;
+    const now = Date.now();
+
     updateInvoice(invoice.id, {
+      dueDate: updatedDue,
+      lineItems,
+      subtotal: roundedSubtotal,
+      total,
+      notes,
       status: "sent",
-      sentAt: Date.now(),
+      sentAt: now,
     });
 
     // Auto-download PDF for immediate Gmail attachment drag & drop
     downloadInvoicePdf({ 
-      invoice: { ...invoice, lineItems, total, subtotal: roundedSubtotal }, 
+      invoice: { ...invoice, lineItems, total, subtotal: roundedSubtotal, dueDate: updatedDue, status: "sent", sentAt: now }, 
       customer, 
       org: activeOrg 
     });
@@ -175,10 +182,18 @@ https://staxifytech.com`;
   };
 
   const handleMarkAsPaid = () => {
-    handleSaveInvoice();
+    const updatedDue = dueDateStr ? new Date(dueDateStr).getTime() : invoice.dueDate;
+    const now = Date.now();
+
+    // Atomic update combining saved invoice details and paid status
     updateInvoice(invoice.id, {
+      dueDate: updatedDue,
+      lineItems,
+      subtotal: roundedSubtotal,
+      total,
+      notes,
       status: "paid",
-      paidAt: Date.now(),
+      paidAt: now,
     });
     onClose();
   };
