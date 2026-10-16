@@ -684,35 +684,6 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
         (normalizedEmail.includes("@") && m.email.toLowerCase().split("@")[0] === normalizedEmail.split("@")[0])
     );
 
-    // Auto-recognize Staxify2025 and Jeff if they happen to not be in the active list
-    if (!matched) {
-      if (normalizedEmail.includes("staxify2025") || normalizedEmail === "staxify2025") {
-        matched = {
-          uid: "user-staxify2025",
-          displayName: "Staxify2025",
-          email: normalizedEmail.includes("@") ? normalizedEmail : "staxify2025@staxifytech.com",
-          role: "admin",
-          orgId: activeOrg.id,
-          createdAt: Date.now(),
-        };
-        const next = [...teamMembers, matched];
-        setTeamMembers(next);
-        localStorage.setItem("staxhq_team_members", JSON.stringify(next));
-      } else if (normalizedEmail.includes("jeff") || normalizedEmail === "jeff") {
-        matched = {
-          uid: "user-jeff",
-          displayName: "Jeff",
-          email: "jeff@staxifytech.com",
-          role: "admin",
-          orgId: activeOrg.id,
-          createdAt: Date.now(),
-        };
-        const next = [...teamMembers, matched];
-        setTeamMembers(next);
-        localStorage.setItem("staxhq_team_members", JSON.stringify(next));
-      }
-    }
-
     if (!matched) {
       return {
         success: false,
@@ -734,17 +705,16 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
       defaultSeedPasswords[matched.email.toLowerCase()] ||
       defaultSeedPasswords[normalizedEmail];
 
-    // Check if entered password matches saved, or matches known authorized defaults (Onesite@1219, admin123)
+    // Check if entered password matches saved, or matches known authorized executive defaults
     const isJeff = matched.email.toLowerCase() === "jeff@staxifytech.com" || matched.email.toLowerCase().includes("jeff");
     const isStaxify2025 = matched.displayName.toLowerCase().includes("staxify2025") || matched.email.toLowerCase().includes("staxify2025");
     
     const isSpecialMatch = 
       (isJeff && (password === "Onesite@1219" || password === "admin123")) ||
-      (isStaxify2025 && (password === "Onesite@1219" || password === "admin123" || password === "password123")) ||
-      (matched.role === "admin" && password === "admin123");
+      (isStaxify2025 && (password === "Onesite@1219" || password === "admin123" || password === "password123"));
 
     if (!currentSavedPassword) {
-      // First-time login
+      // First-time login password establishment
       if (password.length < 6) {
         return {
           success: false,
@@ -758,6 +728,9 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
       };
       setUserPasswords(updatedPasswords);
       localStorage.setItem("staxhq_user_passwords", JSON.stringify(updatedPasswords));
+      if (!isDemoMode) {
+        syncAuthCredentials(activeOrg.id, updatedPasswords).catch(console.warn);
+      }
     } else {
       // Check stored password
       if (currentSavedPassword !== password && !isSpecialMatch) {
@@ -776,6 +749,9 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
         };
         setUserPasswords(updatedPasswords);
         localStorage.setItem("staxhq_user_passwords", JSON.stringify(updatedPasswords));
+        if (!isDemoMode) {
+          syncAuthCredentials(activeOrg.id, updatedPasswords).catch(console.warn);
+        }
       }
     }
 
