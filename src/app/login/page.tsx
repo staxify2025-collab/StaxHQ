@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, Suspense } from "react";
+import React, { useState, useEffect, useMemo, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { 
   ShieldCheck, 
@@ -33,11 +33,12 @@ function LoginContent() {
     login, 
     sendResetVerificationEmail, 
     confirmPasswordResetWithCode, 
-    teamMembers 
+    teamMembers,
+    userPasswords 
   } = useTenant();
 
   const [mode, setMode] = useState<AuthViewMode>("signin");
-  const [email, setEmail] = useState("jeff@staxifytech.com");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -51,7 +52,30 @@ function LoginContent() {
   const [successMessage, setSuccessMessage] = useState("");
   const [emailSentTo, setEmailSentTo] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [showQuickAccess, setShowQuickAccess] = useState(false);
+
+  // Dynamic Team Member & Password Status Detection
+  const normalizedEmail = email.trim().toLowerCase();
+
+  const matchedMember = useMemo(() => {
+    if (!normalizedEmail) return null;
+    return teamMembers.find(
+      (m) =>
+        m.email.toLowerCase() === normalizedEmail ||
+        m.displayName.toLowerCase() === normalizedEmail ||
+        m.email.toLowerCase().startsWith(normalizedEmail + "@") ||
+        (normalizedEmail.includes("@") && m.email.toLowerCase().split("@")[0] === normalizedEmail.split("@")[0])
+    );
+  }, [normalizedEmail, teamMembers]);
+
+  const isFirstTimeUser = useMemo(() => {
+    if (!matchedMember) return false;
+    const memberEmail = matchedMember.email.toLowerCase();
+    const hasExistingPassword = Boolean(
+      (userPasswords && userPasswords[memberEmail]) ||
+      (userPasswords && userPasswords[normalizedEmail])
+    );
+    return !hasExistingPassword;
+  }, [matchedMember, userPasswords, normalizedEmail]);
 
   // Check for incoming Firebase Auth action parameters in URL (?mode=resetPassword&oobCode=...)
   useEffect(() => {
@@ -65,7 +89,7 @@ function LoginContent() {
     }
   }, [searchParams]);
 
-  // Standard Login Handler
+  // Sign In / First-Time Password Setup Handler
   const handleSignIn = (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
@@ -77,6 +101,40 @@ function LoginContent() {
       return;
     }
 
+    // Strict Whitelist Gate: Ensure user exists in team directory
+    if (!matchedMember) {
+      setError(`Access Denied: "${trimmedEmail}" is not registered in the StaxHQ Team Directory. Contact your workspace administrator for access.`);
+      return;
+    }
+
+    // First-Time Password Establishment for Authorized Team Member
+    if (isFirstTimeUser) {
+      if (!password || password.length < 6) {
+        setError("Please choose a secure password with at least 6 characters.");
+        return;
+      }
+
+      if (password !== confirmPassword) {
+        setError("Passwords do not match. Please ensure both fields are identical.");
+        return;
+      }
+
+      setIsLoading(true);
+      const result = login(trimmedEmail, password);
+
+      if (result.success) {
+        setSuccessMessage(`Account activated! Welcome to StaxHQ, ${matchedMember.displayName}. Entering workspace...`);
+        setTimeout(() => {
+          router.push("/dashboard");
+        }, 500);
+      } else {
+        setError(result.error || "Failed to establish workspace credentials. Please try again.");
+        setIsLoading(false);
+      }
+      return;
+    }
+
+    // Returning Team Member Sign In
     if (!password) {
       setError("Please enter your account password.");
       return;
@@ -91,7 +149,7 @@ function LoginContent() {
         router.push("/dashboard");
       }, 400);
     } else {
-      setError(result.error || "Invalid credentials. Please verify your credentials and try again.");
+      setError(result.error || "Invalid credentials. Please verify your password and try again.");
       setIsLoading(false);
     }
   };
@@ -173,25 +231,6 @@ function LoginContent() {
       }
     } catch (err: any) {
       setError(err?.message || "An unexpected error occurred during password update.");
-      setIsLoading(false);
-    }
-  };
-
-  const handleQuickLogin = (quickEmail: string, quickPass: string) => {
-    setEmail(quickEmail);
-    setPassword(quickPass);
-    setError("");
-    setSuccessMessage("");
-    setIsLoading(true);
-    
-    const result = login(quickEmail, quickPass);
-    if (result.success) {
-      setSuccessMessage(`Signing in as ${quickEmail}...`);
-      setTimeout(() => {
-        router.push("/dashboard");
-      }, 400);
-    } else {
-      setError(result.error || "Failed to sign in.");
       setIsLoading(false);
     }
   };
@@ -300,9 +339,24 @@ function LoginContent() {
             </div>
           )}
 
-          {/* 1. SIGN IN VIEW */}
+          {/* 1. SIGN IN VIEW (DYNAMIC FIRST-TIME SETUP OR STANDARD LOGIN) */}
           {mode === "signin" && (
             <form onSubmit={handleSignIn} className="space-y-4">
+              {/* Dynamic First-Time Setup Notification Banner */}
+              {matchedMember && isFirstTimeUser && (
+                <div className="p-3.5 rounded-xl bg-gradient-to-r from-amber-500/15 to-orange-500/15 border border-amber-500/40 text-amber-200 text-xs flex items-start gap-3 animate-in fade-in-50">
+                  <Sparkles className="h-4 w-4 text-amber-400 shrink-0 mt-0.5" />
+                  <div className="space-y-0.5">
+                    <div className="font-bold text-white flex items-center gap-1.5">
+                      <span>Welcome to StaxHQ, {matchedMember.displayName}!</span>
+                    </div>
+                    <p className="text-[11px] text-amber-300/90 leading-relaxed">
+                      First-time setup detected. Please create your workspace password below to activate your account.
+                    </p>
+                  </div>
+                </div>
+              )}
+
               <div>
                 <Label htmlFor="email" className="text-xs font-semibold text-slate-300">
                   Email Address / Username
@@ -317,7 +371,7 @@ function LoginContent() {
                       setEmail(e.target.value);
                       if (error) setError("");
                     }}
-                    placeholder="jeff@staxifytech.com"
+                    placeholder="Enter your registered team email"
                     className="pl-9 bg-slate-950/60 border-slate-800 text-white placeholder:text-slate-600 text-xs h-10 rounded-xl focus:border-indigo-500 focus:ring-indigo-500"
                     required
                     autoComplete="email"
@@ -325,63 +379,149 @@ function LoginContent() {
                 </div>
               </div>
 
-              <div>
-                <div className="flex items-center justify-between">
-                  <Label htmlFor="password" className="text-xs font-semibold text-slate-300">
-                    Password
-                  </Label>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setMode("requestReset");
-                      setError("");
-                      setSuccessMessage("");
-                      setEmailSentTo(null);
-                    }}
-                    className="text-[11px] text-indigo-400 hover:text-indigo-300 font-medium transition-colors"
-                  >
-                    Forgot Password?
-                  </button>
-                </div>
-                <div className="relative mt-1.5">
-                  <Lock className="absolute left-3 top-2.5 h-4 w-4 text-slate-500" />
-                  <Input
-                    id="password"
-                    type={showPassword ? "text" : "password"}
-                    value={password}
-                    onChange={(e) => {
-                      setPassword(e.target.value);
-                      if (error) setError("");
-                    }}
-                    placeholder="••••••••"
-                    className="pl-9 pr-10 bg-slate-950/60 border-slate-800 text-white placeholder:text-slate-600 text-xs h-10 rounded-xl focus:border-indigo-500 focus:ring-indigo-500"
-                    required
-                    autoComplete="current-password"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-200 transition-colors focus:outline-none p-0.5 rounded"
-                    title={showPassword ? "Hide password" : "Show password"}
-                    aria-label={showPassword ? "Hide password" : "Show password"}
-                  >
-                    {showPassword ? (
-                      <EyeOff className="h-4 w-4 text-indigo-400" />
-                    ) : (
-                      <Eye className="h-4 w-4 text-slate-400" />
-                    )}
-                  </button>
-                </div>
-              </div>
+              {/* Password Fields: Adapted for First-Time Setup vs Standard Login */}
+              {isFirstTimeUser ? (
+                <>
+                  <div>
+                    <Label htmlFor="password" className="text-xs font-semibold text-amber-300">
+                      Create Password (min 6 characters) *
+                    </Label>
+                    <div className="relative mt-1.5">
+                      <Lock className="absolute left-3 top-2.5 h-4 w-4 text-slate-500" />
+                      <Input
+                        id="password"
+                        type={showPassword ? "text" : "password"}
+                        value={password}
+                        onChange={(e) => {
+                          setPassword(e.target.value);
+                          if (error) setError("");
+                        }}
+                        placeholder="Choose a secure password"
+                        className="pl-9 pr-10 bg-slate-950/60 border-amber-500/40 text-white placeholder:text-slate-600 text-xs h-10 rounded-xl focus:border-amber-400 focus:ring-amber-400"
+                        required
+                        autoComplete="new-password"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-200 transition-colors focus:outline-none p-0.5 rounded"
+                        title={showPassword ? "Hide password" : "Show password"}
+                        aria-label={showPassword ? "Hide password" : "Show password"}
+                      >
+                        {showPassword ? (
+                          <EyeOff className="h-4 w-4 text-amber-400" />
+                        ) : (
+                          <Eye className="h-4 w-4 text-slate-400" />
+                        )}
+                      </button>
+                    </div>
+                  </div>
 
-              <Button
-                type="submit"
-                disabled={isLoading}
-                className="w-full h-10 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white font-semibold text-xs shadow-lg shadow-indigo-500/25 transition-all gap-2 mt-2"
-              >
-                <span>{isLoading ? "Signing In..." : "Sign In to Workspace"}</span>
-                <ArrowRight className="h-4 w-4" />
-              </Button>
+                  <div>
+                    <Label htmlFor="confirmPassword" className="text-xs font-semibold text-amber-300">
+                      Confirm Password *
+                    </Label>
+                    <div className="relative mt-1.5">
+                      <Lock className="absolute left-3 top-2.5 h-4 w-4 text-slate-500" />
+                      <Input
+                        id="confirmPassword"
+                        type={showConfirmPassword ? "text" : "password"}
+                        value={confirmPassword}
+                        onChange={(e) => {
+                          setConfirmPassword(e.target.value);
+                          if (error) setError("");
+                        }}
+                        placeholder="Re-enter your new password"
+                        className="pl-9 pr-10 bg-slate-950/60 border-amber-500/40 text-white placeholder:text-slate-600 text-xs h-10 rounded-xl focus:border-amber-400 focus:ring-amber-400"
+                        required
+                        autoComplete="new-password"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                        className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-200 transition-colors focus:outline-none p-0.5 rounded"
+                        title={showConfirmPassword ? "Hide password" : "Show password"}
+                        aria-label={showConfirmPassword ? "Hide password" : "Show password"}
+                      >
+                        {showConfirmPassword ? (
+                          <EyeOff className="h-4 w-4 text-amber-400" />
+                        ) : (
+                          <Eye className="h-4 w-4 text-slate-400" />
+                        )}
+                      </button>
+                    </div>
+                  </div>
+
+                  <Button
+                    type="submit"
+                    disabled={isLoading}
+                    className="w-full h-10 rounded-xl bg-gradient-to-r from-amber-600 via-orange-600 to-indigo-600 hover:from-amber-500 hover:to-indigo-500 text-white font-semibold text-xs shadow-lg shadow-orange-500/25 transition-all gap-2 mt-2"
+                  >
+                    <span>{isLoading ? "Activating Credentials..." : "Create Password & Enter Workspace"}</span>
+                    <ArrowRight className="h-4 w-4" />
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <div>
+                    <div className="flex items-center justify-between">
+                      <Label htmlFor="password" className="text-xs font-semibold text-slate-300">
+                        Password
+                      </Label>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setMode("requestReset");
+                          setError("");
+                          setSuccessMessage("");
+                          setEmailSentTo(null);
+                        }}
+                        className="text-[11px] text-indigo-400 hover:text-indigo-300 font-medium transition-colors"
+                      >
+                        Forgot Password?
+                      </button>
+                    </div>
+                    <div className="relative mt-1.5">
+                      <Lock className="absolute left-3 top-2.5 h-4 w-4 text-slate-500" />
+                      <Input
+                        id="password"
+                        type={showPassword ? "text" : "password"}
+                        value={password}
+                        onChange={(e) => {
+                          setPassword(e.target.value);
+                          if (error) setError("");
+                        }}
+                        placeholder="••••••••"
+                        className="pl-9 pr-10 bg-slate-950/60 border-slate-800 text-white placeholder:text-slate-600 text-xs h-10 rounded-xl focus:border-indigo-500 focus:ring-indigo-500"
+                        required
+                        autoComplete="current-password"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-200 transition-colors focus:outline-none p-0.5 rounded"
+                        title={showPassword ? "Hide password" : "Show password"}
+                        aria-label={showPassword ? "Hide password" : "Show password"}
+                      >
+                        {showPassword ? (
+                          <EyeOff className="h-4 w-4 text-indigo-400" />
+                        ) : (
+                          <Eye className="h-4 w-4 text-slate-400" />
+                        )}
+                      </button>
+                    </div>
+                  </div>
+
+                  <Button
+                    type="submit"
+                    disabled={isLoading}
+                    className="w-full h-10 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white font-semibold text-xs shadow-lg shadow-indigo-500/25 transition-all gap-2 mt-2"
+                  >
+                    <span>{isLoading ? "Signing In..." : "Sign In to Workspace"}</span>
+                    <ArrowRight className="h-4 w-4" />
+                  </Button>
+                </>
+              )}
             </form>
           )}
 
@@ -599,99 +739,6 @@ function LoginContent() {
                 </Button>
               </div>
             </form>
-          )}
-        </div>
-
-        {/* Quick Access & Recovery Drawer */}
-        <div className="rounded-xl border border-slate-800/80 bg-slate-900/50 backdrop-blur-md p-3.5 space-y-2.5">
-          <button
-            type="button"
-            onClick={() => setShowQuickAccess(!showQuickAccess)}
-            className="w-full flex items-center justify-between text-xs font-semibold text-slate-300 hover:text-white transition-colors"
-          >
-            <div className="flex items-center gap-2">
-              <Sparkles className="w-3.5 h-3.5 text-indigo-400" />
-              <span>Authorized Team Members & 1-Click Entry</span>
-            </div>
-            <span className="text-[10px] text-slate-500 underline">
-              {showQuickAccess ? "Hide" : "Show Fast Login"}
-            </span>
-          </button>
-
-          {showQuickAccess && (
-            <div className="space-y-2 pt-2 border-t border-slate-800 animate-in fade-in-50">
-              <p className="text-[11px] text-slate-400">
-                Click any profile to sign in with authorized executive credentials:
-              </p>
-              
-              <div className="grid grid-cols-1 gap-1.5">
-                {/* Jeff */}
-                <button
-                  type="button"
-                  onClick={() => handleQuickLogin("jeff@staxifytech.com", "Onesite@1219")}
-                  className="flex items-center justify-between p-2 rounded-lg bg-indigo-950/40 hover:bg-indigo-900/50 border border-indigo-500/30 text-left transition-all group"
-                >
-                  <div className="flex items-center gap-2">
-                    <UserCheck className="w-3.5 h-3.5 text-indigo-400" />
-                    <div>
-                      <div className="text-xs font-bold text-white group-hover:text-indigo-200">
-                        Jeff (Executive Admin)
-                      </div>
-                      <div className="text-[10px] text-indigo-300 font-mono">
-                        jeff@staxifytech.com
-                      </div>
-                    </div>
-                  </div>
-                  <span className="text-[10px] bg-indigo-500/20 text-indigo-300 font-semibold px-2 py-0.5 rounded border border-indigo-500/30">
-                    1-Click Sign In ➔
-                  </span>
-                </button>
-
-                {/* Staxify2025 */}
-                <button
-                  type="button"
-                  onClick={() => handleQuickLogin("staxify2025@staxifytech.com", "admin123")}
-                  className="flex items-center justify-between p-2 rounded-lg bg-slate-950/60 hover:bg-slate-800/80 border border-slate-800 text-left transition-all group"
-                >
-                  <div className="flex items-center gap-2">
-                    <UserCheck className="w-3.5 h-3.5 text-purple-400" />
-                    <div>
-                      <div className="text-xs font-bold text-slate-200 group-hover:text-white">
-                        Staxify2025 (Admin)
-                      </div>
-                      <div className="text-[10px] text-slate-400 font-mono">
-                        staxify2025@staxifytech.com
-                      </div>
-                    </div>
-                  </div>
-                  <span className="text-[10px] bg-slate-800 text-slate-300 font-semibold px-2 py-0.5 rounded border border-slate-700">
-                    1-Click Sign In ➔
-                  </span>
-                </button>
-
-                {/* Sarah Jenkins */}
-                <button
-                  type="button"
-                  onClick={() => handleQuickLogin("sarah@staxhq.com", "password123")}
-                  className="flex items-center justify-between p-2 rounded-lg bg-slate-950/60 hover:bg-slate-800/80 border border-slate-800 text-left transition-all group"
-                >
-                  <div className="flex items-center gap-2">
-                    <UserCheck className="w-3.5 h-3.5 text-slate-400" />
-                    <div>
-                      <div className="text-xs font-bold text-slate-300 group-hover:text-white">
-                        Sarah Jenkins (Admin)
-                      </div>
-                      <div className="text-[10px] text-slate-500 font-mono">
-                        sarah@staxhq.com
-                      </div>
-                    </div>
-                  </div>
-                  <span className="text-[10px] bg-slate-800 text-slate-400 font-semibold px-2 py-0.5 rounded border border-slate-700">
-                    1-Click Sign In ➔
-                  </span>
-                </button>
-              </div>
-            </div>
           )}
         </div>
 
