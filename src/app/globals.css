@@ -81,7 +81,12 @@
     background: white !important;
     color: black !important;
   }
-  .no-print {
+  aside,
+  header,
+  nav,
+  .no-print,
+  .print-hidden,
+  [data-print-hidden="true"] {
     display: none !important;
   }
   .print-only {

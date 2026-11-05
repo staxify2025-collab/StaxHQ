@@ -119,7 +119,7 @@ export function AiChatDrawer() {
       {!isOpen && (
         <button
           onClick={() => setIsOpen(true)}
-          className="fixed bottom-6 right-6 z-40 flex items-center gap-2.5 px-4 py-3 rounded-full bg-gradient-to-r from-indigo-600 to-violet-600 text-white shadow-xl shadow-indigo-500/30 hover:scale-105 active:scale-95 transition-all duration-200"
+          className="fixed bottom-6 right-6 z-40 flex items-center gap-2.5 px-4 py-3 rounded-full bg-gradient-to-r from-indigo-600 to-violet-600 text-white shadow-xl shadow-indigo-500/30 hover:scale-105 active:scale-95 transition-all duration-200 print:hidden"
         >
           <Sparkles className="h-5 w-5 animate-spin-slow" />
           <span className="font-semibold text-sm">AI Copilot</span>
@@ -128,7 +128,7 @@ export function AiChatDrawer() {
 
       {/* Slide-out Drawer */}
       {isOpen && (
-        <div className="fixed bottom-6 right-6 w-96 max-w-[calc(100vw-2rem)] h-[550px] rounded-2xl bg-card border border-border/80 shadow-2xl z-50 flex flex-col overflow-hidden animate-in slide-in-from-bottom-5">
+        <div className="fixed bottom-6 right-6 w-96 max-w-[calc(100vw-2rem)] h-[550px] rounded-2xl bg-card border border-border/80 shadow-2xl z-50 flex flex-col overflow-hidden animate-in slide-in-from-bottom-5 print:hidden">
           {/* Header */}
           <div className="p-4 bg-gradient-to-r from-indigo-600 to-violet-600 text-white flex items-center justify-between">
             <div className="flex items-center gap-2.5">
